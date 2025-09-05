@@ -93,7 +93,7 @@ show_hook_logs() {
     local namespace="demo-app-${env}"
     local job_name="${env}-post-sync-validation"
     
-    log_header "📄 ${env^^} Hook Logs"
+    log_header "📄 $(echo $env | tr '[:lower:]' '[:upper:]') Hook Logs"
     
     if kubectl get namespace "$namespace" &> /dev/null; then
         if kubectl get job "$job_name" -n "$namespace" &> /dev/null; then
@@ -148,7 +148,8 @@ trigger_sync_demo() {
     
     echo
     log_info "Watch the hooks execute:"
-    echo "  kubectl get jobs -n demo-app-dev demo-app-prod -w"
+    echo "  kubectl get jobs -n demo-app-dev -w"
+    echo "  kubectl get jobs -n demo-app-prod -w"
     echo
     log_info "In separate terminals, you can follow the logs:"
     echo "  kubectl logs -f job/dev-post-sync-validation -n demo-app-dev"
