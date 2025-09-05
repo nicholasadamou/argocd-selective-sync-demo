@@ -69,11 +69,11 @@ deploy_applications() {
     
     # Deploy dev application
     log_info "Deploying dev application with post-sync hooks..."
-    kubectl apply -f ../apps/dev/demo-app.yaml
+    kubectl apply -f apps/dev/demo-app.yaml
     
     # Deploy production application  
     log_info "Deploying production application with enhanced post-sync hooks..."
-    kubectl apply -f ../apps/production/demo-app.yaml
+    kubectl apply -f apps/production/demo-app.yaml
     
     log_success "Both applications deployed with post-sync hooks"
 }
