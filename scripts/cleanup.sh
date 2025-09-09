@@ -74,7 +74,26 @@ cleanup() {
     
     # Wait a moment for applications to be cleaned up
     log_info "Waiting for applications to be cleaned up..."
-    sleep 5
+    sleep 10
+    
+    # Check for stuck applications and remove finalizers if needed
+    log_info "Checking for stuck applications with finalizers..."
+    local stuck_apps=()
+    for app in dev-demo-app dev-api-service production-demo-app production-api-service; do
+        if kubectl get application "$app" -n argocd &> /dev/null; then
+            stuck_apps+=("$app")
+        fi
+    done
+    
+    if [ ${#stuck_apps[@]} -gt 0 ]; then
+        log_warning "Found ${#stuck_apps[@]} stuck applications, removing finalizers..."
+        for app in "${stuck_apps[@]}"; do
+            log_info "Removing finalizers from $app"
+            kubectl patch application "$app" -n argocd --type merge --patch '{"metadata":{"finalizers":null}}' &> /dev/null || true
+            log_success "Finalizers removed from $app"
+        done
+        sleep 3
+    fi
     
     # Remove namespaces
     log_info "Removing demo namespaces..."
@@ -82,8 +101,11 @@ cleanup() {
     for ns in demo-app-dev demo-app-prod; do
         if kubectl get namespace "$ns" &> /dev/null; then
             log_info "Removing namespace: $ns"
-            kubectl delete namespace "$ns" --timeout=60s
-            log_success "Namespace $ns removed"
+            kubectl delete namespace "$ns" --timeout=30s || {
+                log_warning "Namespace $ns is stuck, force deleting..."
+                kubectl delete namespace "$ns" --force --grace-period=0 &> /dev/null || true
+                log_success "Namespace $ns force deleted"
+            }
         else
             log_warning "Namespace $ns not found"
         fi
