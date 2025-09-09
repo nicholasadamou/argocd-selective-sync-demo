@@ -40,13 +40,13 @@ cleanup() {
         exit 1
     fi
     
-    # Remove environment controllers (this will cascade delete their managed apps)
+    # Remove environment controllers (ApplicationSets - this will cascade delete their managed apps)
     log_info "Removing environment controllers..."
     
     for controller in dev-controller production-controller; do
-        if kubectl get application "$controller" -n argocd &> /dev/null; then
+        if kubectl get applicationset "$controller" -n argocd &> /dev/null; then
             log_info "Removing controller: $controller"
-            kubectl delete application "$controller" -n argocd
+            kubectl delete applicationset "$controller" -n argocd
             log_success "Controller $controller removed (child apps will be cascaded)"
         else
             log_warning "Controller $controller not found"

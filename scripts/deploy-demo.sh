@@ -90,20 +90,20 @@ wait_for_applications() {
     local max_attempts=30
     local attempt=0
     
-    # Wait for environment controllers
+    # Wait for environment controllers (ApplicationSets)
     log_info "Waiting for environment controllers to be created..."
     while [ $attempt -lt 15 ]; do
         local controllers=0
         local expected_controllers=("dev-controller" "production-controller")
         
         for controller in "${expected_controllers[@]}"; do
-            if kubectl get application "$controller" -n argocd &> /dev/null; then
+            if kubectl get applicationset "$controller" -n argocd &> /dev/null; then
                 ((controllers++))
             fi
         done
         
         if [ $controllers -eq 2 ]; then
-            log_success "Both environment controllers created successfully"
+            log_success "Both environment controllers (ApplicationSets) created successfully"
             break
         fi
         
