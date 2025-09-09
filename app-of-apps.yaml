@@ -10,7 +10,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
-    targetRevision: HEAD
+    targetRevision: feature/app-of-apps-selective-sync
     path: apps/environments
   destination:
     server: https://kubernetes.default.svc
