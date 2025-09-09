@@ -11,9 +11,7 @@ spec:
   source:
     repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
     targetRevision: feature/app-of-apps-selective-sync
-    path: apps/services
-    directory:
-      recurse: true
+    path: apps/environments
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
