@@ -14,7 +14,7 @@ spec:
     targetRevision: feature/app-of-apps-selective-sync
     path: apps/services
     directory:
-      include: '*/dev.yaml'
+      include: '{demo-app/dev.yaml,api-service/dev.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
