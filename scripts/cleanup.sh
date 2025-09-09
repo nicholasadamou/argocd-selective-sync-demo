@@ -40,30 +40,22 @@ cleanup() {
         exit 1
     fi
     
-    # Remove parent app-of-apps application (this will cascade delete all child apps)
-    log_info "Removing app-of-apps parent application..."
+    # Remove environment controllers (this will cascade delete their managed apps)
+    log_info "Removing environment controllers..."
     
-    if kubectl get application app-of-apps -n argocd &> /dev/null; then
-        log_info "Removing parent application: app-of-apps"
-        kubectl delete application app-of-apps -n argocd
-        log_success "Parent app-of-apps removed (child apps will be cascaded)"
-    else
-        log_warning "App-of-apps parent application not found"
-    fi
-    
-    # Also clean up environment ApplicationSets and service apps in case they exist
-    log_info "Cleaning up any remaining environment ApplicationSets and service applications..."
-    
-    # Clean up ApplicationSets first
-    for appset in dev-apps production-apps; do
-        if kubectl get applicationset "$appset" -n argocd &> /dev/null; then
-            log_info "Removing ApplicationSet: $appset"
-            kubectl delete applicationset "$appset" -n argocd
-            log_success "ApplicationSet $appset removed"
+    for controller in dev-controller production-controller; do
+        if kubectl get application "$controller" -n argocd &> /dev/null; then
+            log_info "Removing controller: $controller"
+            kubectl delete application "$controller" -n argocd
+            log_success "Controller $controller removed (child apps will be cascaded)"
+        else
+            log_warning "Controller $controller not found"
         fi
     done
     
-    # Clean up any remaining individual applications
+    # Clean up any remaining service applications in case they exist
+    log_info "Cleaning up any remaining service applications..."
+    
     for app in dev-demo-app dev-api-service production-demo-app production-api-service; do
         if kubectl get application "$app" -n argocd &> /dev/null; then
             log_info "Removing application: $app"
@@ -157,8 +149,7 @@ show_help() {
     echo "  -f, --force   Skip confirmation prompt"
     echo
     echo "This will remove:"
-    echo "  • App-of-apps parent application and all environment ApplicationSets"
-    echo "  • Environment ApplicationSets: dev-apps, production-apps"
+    echo "  • Environment controllers: dev-controller, production-controller"
     echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
     echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
     echo "  • Post-sync validation jobs"
@@ -190,9 +181,8 @@ main() {
     done
     
     echo
-    log_warning "This will remove the ArgoCD app-of-apps selective sync demo:"
-    echo "  • App-of-apps parent application and all environment ApplicationSets"
-    echo "  • Environment ApplicationSets: dev-apps, production-apps"
+    log_warning "This will remove the ArgoCD standalone controllers selective sync demo:"
+    echo "  • Environment controllers: dev-controller, production-controller"
     echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
     echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
     echo "  • Post-sync validation jobs"

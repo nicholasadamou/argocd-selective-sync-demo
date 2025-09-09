@@ -63,68 +63,57 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Deploy app-of-apps parent application
+# Deploy standalone environment controllers
 deploy_applications() {
-    log_header "🚀 Deploying App-of-Apps parent application..."
+    log_header "🚀 Deploying standalone environment controllers..."
     
-    # Deploy parent app-of-apps application
-    log_info "Deploying parent application that manages all child applications..."
-    kubectl apply -f app-of-apps.yaml
+    # Deploy dev controller
+    log_info "Deploying dev-controller (manages all dev applications)..."
+    kubectl apply -f dev-controller.yaml
     
-    log_success "App-of-Apps parent application deployed"
-    log_info "This will automatically create the environment ApplicationSets:"
-    echo "  - dev-apps (ApplicationSet that manages all dev applications)"
-    echo "  - production-apps (ApplicationSet that manages all production applications)"
+    # Deploy production controller
+    log_info "Deploying production-controller (manages all production applications)..."
+    kubectl apply -f production-controller.yaml
+    
+    log_success "Both environment controllers deployed"
+    log_info "Each controller will manage its own service applications:"
+    echo "  - dev-controller → dev-demo-app, dev-api-service"
+    echo "  - production-controller → production-demo-app, production-api-service"
     echo
-    log_info "Each ApplicationSet will then generate its service applications:"
-    echo "  - dev-apps → dev-demo-app, dev-api-service"
-    echo "  - production-apps → production-demo-app, production-api-service"
+    log_info "No parent application - these are independent top-level controllers"
 }
 
 # Wait for applications
 wait_for_applications() {
-    log_info "Waiting for parent app and child applications to be created..."
+    log_info "Waiting for environment controllers and service applications to be created..."
     
     local max_attempts=30
     local attempt=0
     
-    # First wait for parent app
-    log_info "Waiting for app-of-apps parent application..."
-    while [ $attempt -lt 10 ]; do
-        if kubectl get application app-of-apps -n argocd &> /dev/null; then
-            log_success "App-of-Apps parent application created"
-            break
-        fi
-        log_info "Waiting for parent app... (attempt $((attempt+1))/10)"
-        sleep 3
-        ((attempt++))
-    done
-    
-    # Then wait for environment ApplicationSets
-    log_info "Waiting for environment ApplicationSets to be created..."
-    attempt=0
+    # Wait for environment controllers
+    log_info "Waiting for environment controllers to be created..."
     while [ $attempt -lt 15 ]; do
-        local env_appsets=0
-        local expected_appsets=("dev-apps" "production-apps")
+        local controllers=0
+        local expected_controllers=("dev-controller" "production-controller")
         
-        for appset in "${expected_appsets[@]}"; do
-            if kubectl get applicationset "$appset" -n argocd &> /dev/null; then
-                ((env_appsets++))
+        for controller in "${expected_controllers[@]}"; do
+            if kubectl get application "$controller" -n argocd &> /dev/null; then
+                ((controllers++))
             fi
         done
         
-        if [ $env_appsets -eq 2 ]; then
-            log_success "Both environment ApplicationSets created successfully"
+        if [ $controllers -eq 2 ]; then
+            log_success "Both environment controllers created successfully"
             break
         fi
         
-        log_info "Found $env_appsets/2 environment ApplicationSets, waiting... (attempt $((attempt+1))/15)"
+        log_info "Found $controllers/2 environment controllers, waiting... (attempt $((attempt+1))/15)"
         sleep 3
         ((attempt++))
     done
     
-    # Finally wait for service applications
-    log_info "Waiting for service applications to be created by environment controllers..."
+    # Wait for service applications
+    log_info "Waiting for service applications to be created by controllers..."
     attempt=0
     while [ $attempt -lt $max_attempts ]; do
         local apps_found=0
@@ -179,15 +168,16 @@ demonstrate_selective_sync() {
     log_header "🎯 App-of-Apps + Selective Sync Demonstration"
     echo
     
-    log_info "This demo shows ArgoCD App-of-Apps pattern with selective sync and post-sync hooks:"
+    log_info "This demo shows standalone environment controllers with selective sync and post-sync hooks:"
     echo
-    echo "1. App-of-Apps Hierarchy:"
-    echo "   - app-of-apps (root) manages 2 environment ApplicationSets:"
-    echo "     * dev-apps (ApplicationSet for dev environment)"
-    echo "     * production-apps (ApplicationSet for production environment)"
-    echo "   - Each ApplicationSet generates service applications:"
-    echo "     * dev-apps → dev-demo-app, dev-api-service"
-    echo "     * production-apps → production-demo-app, production-api-service"
+    echo "1. Standalone Controller Architecture:"
+    echo "   - Two independent top-level environment controllers:"
+    echo "     * dev-controller (manages dev environment applications)"
+    echo "     * production-controller (manages production environment applications)"
+    echo "   - Each controller manages service applications in its environment:"
+    echo "     * dev-controller → dev-demo-app, dev-api-service"
+    echo "     * production-controller → production-demo-app, production-api-service"
+    echo "   - No parent application - controllers are independent"
     echo
     echo "2. Selective Syncing per Service:"
     echo "   - dev-demo-app watches only: deployment.yaml, service.yaml, post-sync-hook.yaml"
