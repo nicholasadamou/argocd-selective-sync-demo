@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: api-service-dev-controller
+  namespace: argocd
+  labels:
+    environment: dev
+    service: api-service
+    app.kubernetes.io/name: api-service-dev-controller
+    app.kubernetes.io/part-of: selective-sync-demo
+spec:
+  generators:
+  - list:
+      elements:
+      - service: api-service
+        path: environments/api-service/dev
+        namespace: demo-app-dev
+        environment: dev
+  template:
+    metadata:
+      name: 'dev-{{service}}'
+      labels:
+        environment: '{{environment}}'
+        service: '{{service}}'
+        controller: api-service-dev-controller
+        app.kubernetes.io/part-of: selective-sync-demo
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
+        targetRevision: feature/app-of-apps-selective-sync
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+        - CreateNamespace=true
+        automated:
+          selfHeal: true
+          prune: true

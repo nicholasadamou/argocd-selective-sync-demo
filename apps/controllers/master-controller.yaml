@@ -1,0 +1,33 @@
+# Master Controller for deploying all service-specific controllers
+# Note: This file is for reference. Deploy individual controllers directly or commit this structure to git first.
+#
+# To use this master controller:
+# 1. Commit all files to git: git add . && git commit -m "Add service-specific controllers" && git push
+# 2. Then apply: kubectl apply -f apps/controllers/master-controller.yaml
+#
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: controllers-master
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: controllers-master
+    app.kubernetes.io/part-of: selective-sync-demo
+    controller-type: master
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
+    targetRevision: feature/app-of-apps-selective-sync
+    path: apps/controllers
+    directory:
+      exclude: "master-controller.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=true
+    automated:
+      selfHeal: true
+      prune: true
