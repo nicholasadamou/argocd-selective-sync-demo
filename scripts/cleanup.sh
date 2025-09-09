@@ -51,10 +51,20 @@ cleanup() {
         log_warning "App-of-apps parent application not found"
     fi
     
-    # Also clean up environment controllers and service apps in case they exist
-    log_info "Cleaning up any remaining environment controllers and service applications..."
+    # Also clean up environment ApplicationSets and service apps in case they exist
+    log_info "Cleaning up any remaining environment ApplicationSets and service applications..."
     
-    for app in dev-apps production-apps dev-demo-app dev-api-service production-demo-app production-api-service; do
+    # Clean up ApplicationSets first
+    for appset in dev-apps production-apps; do
+        if kubectl get applicationset "$appset" -n argocd &> /dev/null; then
+            log_info "Removing ApplicationSet: $appset"
+            kubectl delete applicationset "$appset" -n argocd
+            log_success "ApplicationSet $appset removed"
+        fi
+    done
+    
+    # Clean up any remaining individual applications
+    for app in dev-demo-app dev-api-service production-demo-app production-api-service; do
         if kubectl get application "$app" -n argocd &> /dev/null; then
             log_info "Removing application: $app"
             kubectl delete application "$app" -n argocd
@@ -125,8 +135,8 @@ show_help() {
     echo "  -f, --force   Skip confirmation prompt"
     echo
     echo "This will remove:"
-    echo "  • App-of-apps parent application and all environment controllers"
-    echo "  • Environment controllers: dev-apps, production-apps"
+    echo "  • App-of-apps parent application and all environment ApplicationSets"
+    echo "  • Environment ApplicationSets: dev-apps, production-apps"
     echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
     echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
     echo "  • Post-sync validation jobs"
@@ -159,8 +169,8 @@ main() {
     
     echo
     log_warning "This will remove the ArgoCD app-of-apps selective sync demo:"
-    echo "  • App-of-apps parent application and all environment controllers"
-    echo "  • Environment controllers: dev-apps, production-apps"
+    echo "  • App-of-apps parent application and all environment ApplicationSets"
+    echo "  • Environment ApplicationSets: dev-apps, production-apps"
     echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
     echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
     echo "  • Post-sync validation jobs"

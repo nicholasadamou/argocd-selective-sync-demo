@@ -72,11 +72,11 @@ deploy_applications() {
     kubectl apply -f app-of-apps.yaml
     
     log_success "App-of-Apps parent application deployed"
-    log_info "This will automatically create the environment controllers:"
-    echo "  - dev-apps (manages all dev applications)"
-    echo "  - production-apps (manages all production applications)"
+    log_info "This will automatically create the environment ApplicationSets:"
+    echo "  - dev-apps (ApplicationSet that manages all dev applications)"
+    echo "  - production-apps (ApplicationSet that manages all production applications)"
     echo
-    log_info "Each environment controller will then create its service applications:"
+    log_info "Each ApplicationSet will then generate its service applications:"
     echo "  - dev-apps → dev-demo-app, dev-api-service"
     echo "  - production-apps → production-demo-app, production-api-service"
 }
@@ -100,25 +100,25 @@ wait_for_applications() {
         ((attempt++))
     done
     
-    # Then wait for environment controllers
-    log_info "Waiting for environment controllers to be created..."
+    # Then wait for environment ApplicationSets
+    log_info "Waiting for environment ApplicationSets to be created..."
     attempt=0
     while [ $attempt -lt 15 ]; do
-        local env_controllers=0
-        local expected_controllers=("dev-apps" "production-apps")
+        local env_appsets=0
+        local expected_appsets=("dev-apps" "production-apps")
         
-        for controller in "${expected_controllers[@]}"; do
-            if kubectl get application "$controller" -n argocd &> /dev/null; then
-                ((env_controllers++))
+        for appset in "${expected_appsets[@]}"; do
+            if kubectl get applicationset "$appset" -n argocd &> /dev/null; then
+                ((env_appsets++))
             fi
         done
         
-        if [ $env_controllers -eq 2 ]; then
-            log_success "Both environment controllers created successfully"
+        if [ $env_appsets -eq 2 ]; then
+            log_success "Both environment ApplicationSets created successfully"
             break
         fi
         
-        log_info "Found $env_controllers/2 environment controllers, waiting... (attempt $((attempt+1))/15)"
+        log_info "Found $env_appsets/2 environment ApplicationSets, waiting... (attempt $((attempt+1))/15)"
         sleep 3
         ((attempt++))
     done
@@ -182,10 +182,10 @@ demonstrate_selective_sync() {
     log_info "This demo shows ArgoCD App-of-Apps pattern with selective sync and post-sync hooks:"
     echo
     echo "1. App-of-Apps Hierarchy:"
-    echo "   - app-of-apps (root) manages 2 environment controllers:"
-    echo "     * dev-apps (dev environment controller)"
-    echo "     * production-apps (production environment controller)"
-    echo "   - Each environment controller manages its service applications:"
+    echo "   - app-of-apps (root) manages 2 environment ApplicationSets:"
+    echo "     * dev-apps (ApplicationSet for dev environment)"
+    echo "     * production-apps (ApplicationSet for production environment)"
+    echo "   - Each ApplicationSet generates service applications:"
     echo "     * dev-apps → dev-demo-app, dev-api-service"
     echo "     * production-apps → production-demo-app, production-api-service"
     echo
