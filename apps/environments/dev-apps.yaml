@@ -1,20 +1,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dev-demo-app
+  name: dev-apps
   namespace: argocd
   labels:
     environment: dev
-    service: demo-app
+    app.kubernetes.io/name: dev-apps
+    app.kubernetes.io/part-of: selective-sync-demo
 spec:
   project: default
   source:
     repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
     targetRevision: HEAD
-    path: environments/dev
+    path: apps/services
+    directory:
+      include: '*/dev.yaml'
   destination:
     server: https://kubernetes.default.svc
-    namespace: demo-app-dev
+    namespace: argocd
   syncPolicy:
     syncOptions:
     - CreateNamespace=true

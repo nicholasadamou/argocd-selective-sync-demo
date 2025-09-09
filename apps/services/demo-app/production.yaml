@@ -6,12 +6,13 @@ metadata:
   labels:
     environment: production
     service: demo-app
+    app.kubernetes.io/part-of: selective-sync-demo
 spec:
   project: default
   source:
     repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
     targetRevision: HEAD
-    path: environments/production
+    path: environments/demo-app/production
   destination:
     server: https://kubernetes.default.svc
     namespace: demo-app-prod

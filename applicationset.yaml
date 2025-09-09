@@ -1,9 +1,0 @@
-# This file is replaced by individual application definitions in apps/
-# See apps/dev/demo-app.yaml and apps/production/demo-app.yaml
-# 
-# The individual applications demonstrate per-app selective syncing:
-# - dev-demo-app watches only environments/dev/
-# - production-demo-app watches only environments/production/
-# - Each has its own post-sync validation hooks
-# 
-# Deploy with: kubectl apply -f apps/dev/demo-app.yaml -f apps/production/demo-app.yaml
