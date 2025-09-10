@@ -21,8 +21,18 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 ├── docs/                           # Documentation
 │   └── SECRETS-README.md           # Secret management guide
 ├── scripts/                        # Utility scripts
-│   └── setup-secrets.sh            # Interactive secret setup with testing
-├── app-of-apps/                    # App-of-Apps pattern structure
+│   ├── setup-secrets.sh            # Interactive secret setup with testing
+│   ├── deploy-controllers.sh       # Deploy service-specific controllers
+│   └── cleanup.sh                  # Enhanced cleanup for argocd namespace
+├── apps/                          # Service-specific controller structure (NEW)
+│   └── controllers/               # Individual service controllers
+│       ├── README.md              # Controller documentation
+│       ├── demo-app-dev-controller.yaml
+│       ├── demo-app-production-controller.yaml
+│       ├── api-service-dev-controller.yaml
+│       ├── api-service-production-controller.yaml
+│       └── master-controller.yaml # App-of-Apps controller for git-based deployment
+├── app-of-apps/                    # Original App-of-Apps pattern structure
 │   ├── environments/               # Environment controllers (parent apps)
 │   │   ├── dev/
 │   │   │   └── dev-environment-controller.yaml
@@ -35,23 +45,44 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 │       └── production/
 │           ├── production-api-app.yaml
 │           └── production-demo-app.yaml
+├── old-controllers/                # Legacy environment-wide controllers
+│   ├── dev-controller.yaml        # Moved from root
+│   └── production-controller.yaml # Moved from root
 └── environments/                   # Application manifests (workloads)
-    ├── dev-api-app/
+    ├── api-service/               # API service environments
+    │   ├── dev/
+    │   │   ├── deployment.yaml
+    │   │   ├── service.yaml
+    │   │   └── post-sync-hook.yaml
+    │   └── production/
+    │       ├── deployment.yaml
+    │       ├── service.yaml (NodePort for kind compatibility)
+    │       └── post-sync-hook.yaml
+    ├── demo-app/                  # Demo app environments
+    │   ├── dev/
+    │   │   ├── deployment.yaml
+    │   │   ├── service.yaml
+    │   │   └── post-sync-hook.yaml
+    │   └── production/
+    │       ├── deployment.yaml
+    │       ├── service.yaml (NodePort for kind compatibility)
+    │       └── post-sync-hook.yaml
+    ├── dev-api-app/              # Legacy structure (still used by app-of-apps)
     │   ├── deployment.yaml
     │   ├── service.yaml
-    │   └── post-sync-hook.yaml     # API-specific post-sync validation
-    ├── dev-demo-app/
+    │   └── post-sync-hook.yaml
+    ├── dev-demo-app/             # Legacy structure (still used by app-of-apps)
     │   ├── deployment.yaml
     │   ├── service.yaml
-    │   └── post-sync-hook.yaml     # Demo app post-sync validation
-    ├── production-api-app/
+    │   └── post-sync-hook.yaml
+    ├── production-api-app/       # Legacy structure (still used by app-of-apps)
     │   ├── deployment.yaml
-    │   ├── service.yaml
-    │   └── post-sync-hook.yaml     # Production API validation
-    └── production-demo-app/
+    │   ├── service.yaml (NodePort)
+    │   └── post-sync-hook.yaml
+    └── production-demo-app/      # Legacy structure (still used by app-of-apps)
         ├── deployment.yaml
-        ├── service.yaml
-        └── post-sync-hook.yaml     # Production demo app validation
+        ├── service.yaml (NodePort)
+        └── post-sync-hook.yaml
 ```
 
 ## 🚀 How It Works
@@ -59,6 +90,25 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 This demo uses the **App-of-Apps pattern** with **environment controllers** managing **individual applications**, each with **dedicated post-sync hooks**:
 
 ### App-of-Apps Architecture
+
+This demo now supports **two deployment patterns**:
+
+#### ✨ **NEW: Service-Specific Controllers** (Recommended)
+
+**Individual ApplicationSet controllers for each service/environment combination:**
+1. **`demo-app-dev-controller`** → Manages `dev-demo-app` application
+2. **`demo-app-production-controller`** → Manages `production-demo-app` application  
+3. **`api-service-dev-controller`** → Manages `dev-api-service` application
+4. **`api-service-production-controller`** → Manages `production-api-service` application
+
+**Benefits:**
+- ✅ **Granular Control**: Each service can be managed independently
+- ✅ **Environment Isolation**: Dev and production controllers are completely separate
+- ✅ **Selective Deployment**: Deploy only specific service controllers as needed
+- ✅ **Enhanced Labeling**: Better labels for filtering and management
+- ✅ **Easier Troubleshooting**: Issues isolated to specific service/environment combinations
+
+#### 🔄 **Original: Environment Controllers** (Legacy)
 
 1. **Environment Controllers** (Parent Apps):
    - `dev-environment-controller` manages all dev applications
@@ -77,6 +127,7 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 - **Scalability**: Easy to add new applications to existing environments
 - **Observability**: Individual application status and health checks
 - **Flexible Deployment**: Deploy environment controllers independently
+- **kind Compatibility**: Production services use NodePort instead of LoadBalancer for local clusters
 
 ### Post-Sync Hooks (Per Application)
 - **Dev API Hook**: API-specific validation (15s wait, 2 retries, API endpoint checks)
@@ -92,11 +143,19 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 
 ## 📋 Prerequisites
 
-- Kubernetes cluster (local or remote)
+- Kubernetes cluster (local or remote) - **kind/Docker Desktop supported**
 - `kubectl` configured to access your cluster
-- ArgoCD installed on your cluster
+- ArgoCD installed on your cluster (in `argocd` namespace)
 - GitHub Personal Access Token (for private repository access)
 - `git` command-line tool
+- `jq` (optional, for enhanced cleanup script functionality)
+
+## ⚙️ Configuration Notes
+
+- **Branch Targeting**: All ArgoCD applications point to `feature/app-of-apps-selective-sync` branch
+- **Service Types**: Production services use `NodePort` for kind/local cluster compatibility
+- **Namespace**: ArgoCD resources are deployed to `argocd` namespace (not `default`)
+- **Self-Healing**: All applications have `selfHeal: true` enabled for demo purposes
 
 ## 🛠️ Quick Setup
 
@@ -107,24 +166,24 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 kubectl create namespace argocd
 
 # Install ArgoCD
-kubectl apply -n default -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 # Wait for ArgoCD to be ready
-kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n default
+kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
 ```
 
 ### 2. Access ArgoCD UI (Optional)
 
 ```bash
 # Port forward to access UI locally
-kubectl port-forward svc/argocd-server -n default 8080:443
+kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
 Open browser to `https://localhost:8080/argocd`
 
 **Get admin password:**
 ```bash
-kubectl -n default get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode && echo
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode && echo
 ```
 
 ### 3. Clone and Deploy Demo
@@ -138,12 +197,16 @@ cd argocd-selective-sync-demo
 # See docs/SECRETS-README.md for detailed instructions
 ./scripts/setup-secrets.sh
 
-# Deploy the App-of-Apps environment controllers
-# This will deploy environment controllers which manage individual applications
+# OPTION 1: Deploy service-specific controllers (NEW - Recommended)
+# Individual controllers for each service in each environment
+./scripts/deploy-controllers.sh
+
+# OPTION 2: Deploy App-of-Apps environment controllers (Original pattern)
+# Environment controllers which manage individual applications
 kubectl apply -f app-of-apps/environments/dev/dev-environment-controller.yaml
 kubectl apply -f app-of-apps/environments/production/production-environment-controller.yaml
 
-# Alternative: Use the setup script (recommended)
+# OPTION 3: Use the original setup script
 ./scripts/deploy-demo.sh
 ```
 
@@ -353,13 +416,30 @@ kubectl port-forward svc/api-app-production-service -n production-api-app 8091:3
 ## 🧹 Cleanup
 
 ```bash
-# Use the cleanup script (recommended)
+# Use the enhanced cleanup script (recommended)
 ./scripts/cleanup.sh
 
-# Or manually:
-# Delete the environment controllers (this will cascade to individual applications)
-kubectl delete application dev-environment-controller -n argocd
-kubectl delete application production-environment-controller -n argocd
+# Force cleanup without confirmation
+./scripts/cleanup.sh --force
+
+# Use different ArgoCD namespace
+ARGOCD_NS=custom-argocd ./scripts/cleanup.sh
+```
+
+The cleanup script now:
+- ✅ **Cleans argocd namespace** - Removes Applications and ApplicationSets
+- ✅ **Handles stuck resources** - Force-removes finalizers from stuck Applications  
+- ✅ **Deletes demo namespaces** - Removes all created application namespaces
+- ✅ **Supports multiple patterns** - Works with both service-specific and environment controllers
+- ✅ **Comprehensive verification** - Shows what was cleaned up
+
+**Manual cleanup (if needed):**
+```bash
+# Delete environment controllers (original pattern)
+kubectl delete application dev-environment-controller production-environment-controller -n argocd
+
+# Delete service-specific controllers (new pattern)
+kubectl delete applicationsets -n argocd -l app.kubernetes.io/part-of=selective-sync-demo
 
 # Clean up application namespaces
 kubectl delete namespace dev-demo-app dev-api-app production-demo-app production-api-app
