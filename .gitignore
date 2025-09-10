@@ -1,3 +1,21 @@
+# ArgoCD Secrets - Never commit actual secrets!
+github-repo-secret.yaml
+github-repo-secret-*.yaml
+*.secret.yaml
+
+# Environment-specific configurations
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
 # Logs
 *.log
 

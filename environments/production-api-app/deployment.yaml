@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-app-production
+  labels:
+    app: api-app-production
+    environment: production
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-app-production
+  template:
+    metadata:
+      labels:
+        app: api-app-production
+        environment: production
+        component: backend
+    spec:
+      containers:
+      - name: api-app
+        image: node:18-alpine
+        ports:
+        - containerPort: 3000
+        command:
+        - /bin/sh
+        - -c
+        - |
+          cat > server.js << 'EOF'
+          const http = require('http');
+          const server = http.createServer((req, res) => {
+            const response = {
+              message: 'Hello from Production API!',
+              environment: 'production',
+              version: 'v1.0.0',
+              timestamp: new Date().toISOString(),
+              endpoint: req.url,
+              replica: process.env.HOSTNAME
+            };
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(response, null, 2));
+          });
+          server.listen(3000, () => {
+            console.log(`Production API Server running on port 3000 - ${process.env.HOSTNAME}`);
+          });
+          EOF
+          node server.js
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: API_VERSION
+          value: "v1.0.0"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5

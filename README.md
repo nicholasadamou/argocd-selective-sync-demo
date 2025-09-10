@@ -1,99 +1,102 @@
-# ArgoCD App-of-Apps + Selective Sync Demo
+# ArgoCD App-of-Apps Pattern Demo
 
-A demonstration of ArgoCD's **App-of-Apps pattern** combined with **selective syncing capabilities**. This demo shows how a parent application can manage multiple child applications, where each child application watches specific files and only syncs when their relevant files change.
+A comprehensive demonstration of ArgoCD's "app-of-apps" pattern with selective syncing capabilities. This demo shows how environment controllers manage individual applications, each with their own dedicated post-sync hooks.
 
 ## 🎯 What This Demonstrates
 
-This demonstrates the **App-of-Apps pattern** with **selective sync** from the [full argocd-selective-sync project](https://github.com/nicholasadamou/argocd-selective-sync). It shows how to manage multiple microservices efficiently using ArgoCD.
+This demo showcases the **App-of-Apps pattern** where each environment has a controller that manages multiple applications within that environment, providing better separation of concerns and granular control.
 
-### Core Concepts
+### Core Concept
 - **Traditional GitOps**: One app watches entire repo → all changes trigger sync
-- **App-of-Apps Pattern**: Parent app manages multiple child applications
-- **Selective Sync**: Each child app watches only specific files → only relevant changes trigger sync
-- **Service Isolation**: Different services sync independently based on their file changes
+- **ApplicationSet Pattern**: Single controller generates multiple apps automatically
+- **App-of-Apps Pattern**: Environment controllers manage individual applications → fine-grained control with per-app hooks
 
 ## 📁 Project Structure
 
 ```
 .
-├── README.md                        # This file
-├── app-of-apps.yaml                 # Root application (manages environment controllers)
-├── apps/                            # ArgoCD application definitions
-│   ├── environments/               # Environment controllers
-│   │   ├── dev-apps.yaml           # Dev environment controller
-│   │   └── production-apps.yaml    # Production environment controller
-│   └── services/                   # Service application definitions
-│       ├── demo-app/
-│       │   ├── dev.yaml            # Dev demo-app application
-│       │   └── production.yaml     # Production demo-app application
-│       └── api-service/
-│           ├── dev.yaml            # Dev api-service application
-│           └── production.yaml     # Production api-service application
-├── environments/                    # Service manifests organized by service
-│   ├── demo-app/
+├── README.md                        # This file - main project documentation
+├── github-repo-secret.template.yaml # Template for GitHub repository access
+├── .gitignore                       # Excludes secrets from version control
+├── docs/                           # Documentation
+│   └── SECRETS-README.md           # Secret management guide
+├── scripts/                        # Utility scripts
+│   └── setup-secrets.sh            # Interactive secret setup with testing
+├── app-of-apps/                    # App-of-Apps pattern structure
+│   ├── environments/               # Environment controllers (parent apps)
 │   │   ├── dev/
-│   │   │   ├── deployment.yaml     # Demo-app dev deployment (1 replica)
-│   │   │   ├── service.yaml        # Demo-app dev ClusterIP service
-│   │   │   └── post-sync-hook.yaml # Demo-app dev post-sync hook
+│   │   │   └── dev-environment-controller.yaml
 │   │   └── production/
-│   │       ├── deployment.yaml     # Demo-app prod deployment (3 replicas)
-│   │       ├── service.yaml        # Demo-app prod LoadBalancer service
-│   │       └── post-sync-hook.yaml # Demo-app prod post-sync hook
-│   └── api-service/
+│   │       └── production-environment-controller.yaml
+│   └── applications/               # Individual application definitions
 │       ├── dev/
-│       │   ├── deployment.yaml     # API service dev deployment (1 replica)
-│       │   ├── service.yaml        # API service dev ClusterIP service
-│       │   └── post-sync-hook.yaml # API service dev post-sync hook
+│       │   ├── dev-api-app.yaml
+│       │   └── dev-demo-app.yaml
 │       └── production/
-│           ├── deployment.yaml     # API service prod deployment (3 replicas)
-│           ├── service.yaml        # API service prod LoadBalancer service
-│           └── post-sync-hook.yaml # API service prod post-sync hook
-└── scripts/
-    ├── deploy-demo.sh              # Demo deployment script
-    ├── demo-hooks.sh               # Demonstrate post-sync hooks behavior
-    └── cleanup.sh                  # Cleanup script
+│           ├── production-api-app.yaml
+│           └── production-demo-app.yaml
+└── environments/                   # Application manifests (workloads)
+    ├── dev-api-app/
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   └── post-sync-hook.yaml     # API-specific post-sync validation
+    ├── dev-demo-app/
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   └── post-sync-hook.yaml     # Demo app post-sync validation
+    ├── production-api-app/
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   └── post-sync-hook.yaml     # Production API validation
+    └── production-demo-app/
+        ├── deployment.yaml
+        ├── service.yaml
+        └── post-sync-hook.yaml     # Production demo app validation
 ```
 
 ## 🚀 How It Works
 
-This demo uses the **App-of-Apps pattern** with **selective syncing** and **post-sync hooks**:
+This demo uses the **App-of-Apps pattern** with **environment controllers** managing **individual applications**, each with **dedicated post-sync hooks**:
 
-### App-of-Apps Hierarchy
-1. **app-of-apps** (root) manages 2 environment controllers:
-   - **dev-apps**: Manages all development applications
-   - **production-apps**: Manages all production applications
+### App-of-Apps Architecture
 
-2. **Environment controllers** manage service applications:
-   - **dev-apps** → dev-demo-app, dev-api-service
-   - **production-apps** → production-demo-app, production-api-service
+1. **Environment Controllers** (Parent Apps):
+   - `dev-environment-controller` manages all dev applications
+   - `production-environment-controller` manages all production applications
 
-3. **Service applications** watch their specific service directories:
-   - **dev-demo-app**: Watches `environments/demo-app/dev/`
-   - **dev-api-service**: Watches `environments/api-service/dev/`
-   - **production-demo-app**: Watches `environments/demo-app/production/`
-   - **production-api-service**: Watches `environments/api-service/production/`
+2. **Individual Applications** (Child Apps):
+   - `dev-api-app` → watches `environments/dev-api-app/` + runs API-specific post-sync validation
+   - `dev-demo-app` → watches `environments/dev-demo-app/` + runs demo app post-sync validation
+   - `production-api-app` → watches `environments/production-api-app/` + runs production API validation
+   - `production-demo-app` → watches `environments/production-demo-app/` + runs production demo validation
 
-### Selective Syncing by Service Directory
-- Each service application watches only its own service directory
-- Changes to demo-app files only affect demo-app applications
-- Changes to api-service files only affect api-service applications
+### App-of-Apps Benefits
+- **Granular Control**: Each application has its own lifecycle and post-sync hooks
+- **Environment Separation**: Environment controllers provide clear boundaries
+- **Per-App Customization**: Different sync policies, retry logic, and hooks per application
+- **Scalability**: Easy to add new applications to existing environments
+- **Observability**: Individual application status and health checks
+- **Flexible Deployment**: Deploy environment controllers independently
 
-### Post-Sync Hooks
-- **Dev Hooks**: Quick validation (10-15s wait, 2 retries, basic health checks)
-- **Production Hooks**: Enhanced validation (20-30s wait, 3 retries, comprehensive checks)
+### Post-Sync Hooks (Per Application)
+- **Dev API Hook**: API-specific validation (15s wait, 2 retries, API endpoint checks)
+- **Dev Demo Hook**: Quick validation (10s wait, 2 retries, basic health check)
+- **Production API Hook**: Comprehensive API validation (30s wait, 5 retries, multiple endpoints)
+- **Production Demo Hook**: Enhanced validation (20s wait, 3 retries, comprehensive checks)
 
-### Selective Syncing + Hooks Behavior
-- ✅ Update `environments/demo-app/dev/deployment.yaml` → **only dev-demo-app syncs + runs demo-app dev hook**
-- ✅ Update `environments/api-service/dev/deployment.yaml` → **only dev-api-service syncs + runs api-service dev hook**
-- ✅ Update `environments/demo-app/production/service.yaml` → **only production-demo-app syncs + runs demo-app production hook**
-- ✅ Update `environments/api-service/production/service.yaml` → **only production-api-service syncs + runs api-service production hook**
-- ✅ Update multiple service directories → **only relevant apps sync independently + respective hooks run**
+### Selective Syncing + Per-App Hooks Behavior
+- ✅ Update `environments/dev-api-app/deployment.yaml` → **only dev-api-app syncs + API-specific dev hook runs**
+- ✅ Update `environments/production-demo-app/service.yaml` → **only production-demo-app syncs + production demo hook runs**
+- ✅ Update multiple app directories → **only affected apps sync + respective hooks run in parallel**
+- ✅ Each application has its own independent sync cycle and validation
 
 ## 📋 Prerequisites
 
 - Kubernetes cluster (local or remote)
 - `kubectl` configured to access your cluster
 - ArgoCD installed on your cluster
+- GitHub Personal Access Token (for private repository access)
+- `git` command-line tool
 
 ## 🛠️ Quick Setup
 
@@ -104,24 +107,24 @@ This demo uses the **App-of-Apps pattern** with **selective syncing** and **post
 kubectl create namespace argocd
 
 # Install ArgoCD
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n default -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 # Wait for ArgoCD to be ready
-kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
+kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n default
 ```
 
 ### 2. Access ArgoCD UI (Optional)
 
 ```bash
 # Port forward to access UI locally
-kubectl port-forward svc/argocd-server -n argocd 8080:443
+kubectl port-forward svc/argocd-server -n default 8080:443
 ```
 
-Open browser to `https://localhost:8080`
+Open browser to `https://localhost:8080/argocd`
 
 **Get admin password:**
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode && echo
+kubectl -n default get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode && echo
 ```
 
 ### 3. Clone and Deploy Demo
@@ -131,166 +134,220 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 git clone https://github.com/nicholasadamou/argocd-selective-sync-demo.git
 cd argocd-selective-sync-demo
 
-# Update the repository URLs in application definitions
-vim app-of-apps.yaml                           # Change repoURL to your forked repository
-vim apps/environments/dev-apps.yaml            # Change repoURL to your forked repository
-vim apps/environments/production-apps.yaml     # Change repoURL to your forked repository
-vim apps/services/demo-app/dev.yaml            # Change repoURL to your forked repository
-vim apps/services/demo-app/production.yaml     # Change repoURL to your forked repository
-vim apps/services/api-service/dev.yaml         # Change repoURL to your forked repository
-vim apps/services/api-service/production.yaml  # Change repoURL to your forked repository
+# Configure GitHub repository access (REQUIRED for private repos)
+# See docs/SECRETS-README.md for detailed instructions
+./scripts/setup-secrets.sh
 
-# Run the demo deployment (deploys root app-of-apps)
+# Deploy the App-of-Apps environment controllers
+# This will deploy environment controllers which manage individual applications
+kubectl apply -f app-of-apps/environments/dev/dev-environment-controller.yaml
+kubectl apply -f app-of-apps/environments/production/production-environment-controller.yaml
+
+# Alternative: Use the setup script (recommended)
 ./scripts/deploy-demo.sh
 ```
 
-## 🎯 Testing App-of-Apps + Selective Sync
+### 4. Verify Setup
 
-### Scenario 1: Update Demo-App in Development Only
 ```bash
-# Edit dev demo-app deployment
-vim environments/dev/deployment.yaml  # Change replicas from 1 to 2
+# Check environment controller applications were created
+kubectl get applications -n argocd -l app-type=environment-controller
 
-# Commit and push
-git add environments/dev/deployment.yaml
-git commit -m "Scale dev demo-app to 2 replicas"
-git push
+# Check individual applications were created by environment controllers
+kubectl get applications -n argocd --show-labels
 
-# Watch ArgoCD - only dev-demo-app will sync
-kubectl get applications -n argocd -w
+# Monitor application status
+watch kubectl get applications -n argocd
 
-# Watch the post-sync hook job
-kubectl get jobs -n demo-app-dev -w
-kubectl logs -f job/dev-post-sync-validation -n demo-app-dev
+# Check ArgoCD logs if needed
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=50
 ```
 
-**Result**: Only the `dev-demo-app` application syncs + demo-app dev post-sync hook runs. All other apps (dev-api-service, production apps) remain untouched.
+## 🔐 Secret Management
 
-### Scenario 2: Update API Service in Production Only
+This repository uses GitHub for source control and requires proper authentication setup for ArgoCD to access private repositories.
+
+### 🔄 Quick Setup
+
 ```bash
-# Edit production api-service deployment
-vim environments/production/api-service-deployment.yaml  # Change replicas from 3 to 5
+# Interactive setup with credential testing (recommended)
+./scripts/setup-secrets.sh
+```
+
+This script will:
+- Prompt for your GitHub credentials securely
+- Create the Kubernetes secret for ArgoCD
+- Test repository access with your credentials
+- Verify ArgoCD can discover environment directories
+- Provide detailed feedback on any issues
+
+### 📚 Detailed Documentation
+
+For comprehensive secret management documentation, see:
+- **[docs/SECRETS-README.md](docs/SECRETS-README.md)** - Complete guide to secret management
+
+### 🔒 Security Notes
+
+- ✅ Secrets are excluded from Git via `.gitignore`
+- ✅ Template files use placeholders (safe to commit)
+- ✅ Setup script includes credential testing
+- ⚠️ Never commit actual secrets to version control
+- ⚠️ Rotate GitHub tokens regularly
+
+## 🎯 Testing Selective Sync
+
+### Scenario 1: Update Dev API App Only
+```bash
+# Edit dev API deployment
+vim environments/dev-api-app/deployment.yaml  # Change replicas from 1 to 2
 
 # Commit and push
-git add environments/production/api-service-deployment.yaml
-git commit -m "Scale production api-service to 5 replicas"
+git add environments/dev-api-app/deployment.yaml
+git commit -m "Scale dev API app to 2 replicas"
 git push
 
-# Watch ArgoCD - only production-api-service will sync
+# Watch ArgoCD - only dev-api-app will sync
+kubectl get applications -n argocd -w
+
+# Watch the API-specific post-sync hook job
+kubectl get jobs -n dev-api-app -w
+kubectl logs -f job/dev-api-post-sync-validation -n dev-api-app
+```
+
+**Result**: Only the `dev-api-app` application syncs + API-specific dev post-sync validation hook runs. All other apps remain untouched.
+
+### Scenario 2: Update Production Demo App Only
+```bash
+# Edit production demo service
+vim environments/production-demo-app/service.yaml  # Change type from ClusterIP to NodePort
+
+# Commit and push
+git add environments/production-demo-app/service.yaml
+git commit -m "Change production demo service to NodePort"
+git push
+
+# Watch ArgoCD - only production-demo-app will sync
 kubectl get applications -n argocd -w
 
 # Watch the enhanced post-sync hook job
-kubectl get jobs -n demo-app-prod -w
-kubectl logs -f job/production-api-post-sync-validation -n demo-app-prod
+kubectl get jobs -n production-demo-app -w
+kubectl logs -f job/production-post-sync-validation -n production-demo-app
 ```
 
-**Result**: Only the `production-api-service` application syncs + api-service production post-sync hook runs. All other apps remain untouched.
+**Result**: Only the `production-demo-app` application syncs + enhanced production post-sync validation hook runs. All other apps remain untouched.
 
-### Scenario 3: Update Different Services in Different Environments
+### Scenario 3: Update Multiple Applications
 ```bash
-# Edit demo-app in dev and api-service in production
-vim environments/dev/deployment.yaml                    # Change demo-app image to nginx:1.22
-vim environments/production/api-service-service.yaml    # Change api-service type to NodePort
+# Edit multiple application deployments
+vim environments/dev-api-app/deployment.yaml        # Change image to nginx:1.22
+vim environments/production-api-app/deployment.yaml # Change image to nginx:1.22
 
 # Commit and push
-git add environments/dev/deployment.yaml environments/production/api-service-service.yaml
-git commit -m "Update demo-app in dev and api-service in prod"
+git add environments/dev-api-app/deployment.yaml environments/production-api-app/deployment.yaml
+git commit -m "Update nginx to version 1.22 in API apps"
 git push
 
-# Watch ArgoCD - only dev-demo-app and production-api-service sync
+# Watch ArgoCD - both API apps sync independently
 kubectl get applications -n argocd -w
+
+# Watch both API post-sync hooks run in parallel
+kubectl get jobs -n dev-api-app -w &
+kubectl get jobs -n production-api-app -w
 ```
 
-**Result**: Only `dev-demo-app` and `production-api-service` sync independently + their respective post-sync hooks run in parallel. Other apps remain untouched.
+**Result**: Both API applications sync independently + both respective API post-sync hooks run in parallel. Demo apps remain untouched.
 
-### Scenario 4: Update Same Service Across Environments
+## 🎯 Demonstrating Selective Sync
+
 ```bash
-# Edit api-service in both environments
-vim environments/dev/api-service-deployment.yaml        # Change image to httpd:2.5
-vim environments/production/api-service-deployment.yaml # Change image to httpd:2.5
+# Automated selective sync demonstration
+./scripts/demo-selective-sync.sh
 
-# Commit and push
-git add environments/*/api-service-deployment.yaml
-git commit -m "Update api-service to httpd:2.5 in all environments"
-git push
+# Run without prompts (great for CI/demos)
+./scripts/demo-selective-sync.sh -y
 
-# Watch ArgoCD - both api-service apps sync independently
-kubectl get applications -n argocd -w
+# Quiet mode (minimal output)
+./scripts/demo-selective-sync.sh -q -y
 ```
 
-**Result**: Both `dev-api-service` and `production-api-service` sync independently + their respective post-sync hooks run in parallel. Demo-app applications remain untouched.
+This script will:
+1. **Show current state** of both dev applications
+2. **Scale dev-api-app** (increase replicas by 1) 
+3. **Monitor sync behavior** in real-time
+4. **Verify selective sync** - only dev-api-app should sync
+5. **Analyze results** and confirm expected behavior
 
 ## 🔍 Demonstrating Post-Sync Hooks
 
 ```bash
-# Compare dev vs production hooks
+# Compare dev vs production hooks across all apps
 ./scripts/demo-hooks.sh compare
 
 # Monitor current post-sync jobs
 ./scripts/demo-hooks.sh monitor
 
-# View hook execution logs
-./scripts/demo-hooks.sh logs dev
-./scripts/demo-hooks.sh logs prod
+# View hook execution logs for specific apps
+./scripts/demo-hooks.sh logs dev demo
+./scripts/demo-hooks.sh logs dev api
+./scripts/demo-hooks.sh logs prod demo
+./scripts/demo-hooks.sh logs prod api
 
-# Force trigger both apps to see hooks in action
+# Force trigger all apps to see hooks in action
 ./scripts/demo-hooks.sh trigger
 ```
 
-### Hook Behavior Differences
-- **Dev Hook**: Quick validation (10s wait, 2 retries) - optimized for fast development feedback
-- **Production Hook**: Comprehensive validation (20s wait, 3 retries) - thorough checks for production stability
+### Hook Behavior Differences (Per Application)
+- **Dev Demo Hook**: Quick validation (10s wait, 2 retries) - optimized for fast development feedback
+- **Dev API Hook**: API validation (15s wait, 2 retries) - API-specific endpoint checks
+- **Production Demo Hook**: Comprehensive validation (20s wait, 3 retries) - thorough checks for production stability
+- **Production API Hook**: Extensive API validation (30s wait, 5 retries) - comprehensive API testing
 
 ## 📊 Monitoring
 
 ### Check Application Status
 ```bash
-# List all applications (parent + children)
-kubectl get applications -n argocd
+# List environment controllers
+kubectl get applications -n argocd -l app-type=environment-controller
 
-# Get detailed status of parent app
-kubectl describe application app-of-apps -n argocd
+# List all individual applications
+kubectl get applications -n argocd --show-labels
 
-# Get detailed status of child applications
+# Get detailed status
 kubectl describe application dev-demo-app -n argocd
-kubectl describe application dev-api-service -n argocd
-kubectl describe application production-demo-app -n argocd
-kubectl describe application production-api-service -n argocd
+kubectl describe application production-api-app -n argocd
 
-# Check post-sync validation jobs for all services
-kubectl get jobs -n demo-app-dev
-kubectl get jobs -n demo-app-prod
+# Check post-sync validation jobs by namespace
+kubectl get jobs -n dev-demo-app
+kubectl get jobs -n dev-api-app
+kubectl get jobs -n production-demo-app
+kubectl get jobs -n production-api-app
 
-# View post-sync hook logs for all services
-kubectl logs -l job-name=dev-post-sync-validation -n demo-app-dev
-kubectl logs -l job-name=dev-api-post-sync-validation -n demo-app-dev
-kubectl logs -l job-name=production-post-sync-validation -n demo-app-prod
-kubectl logs -l job-name=production-api-post-sync-validation -n demo-app-prod
+# View post-sync hook logs
+kubectl logs -l job-name=dev-post-sync-validation -n dev-demo-app
+kubectl logs -l job-name=dev-api-post-sync-validation -n dev-api-app
+kubectl logs -l job-name=production-post-sync-validation -n production-demo-app
+kubectl logs -l job-name=production-api-post-sync-validation -n production-api-app
 
-# Check deployed resources in both namespaces
-kubectl get all -n demo-app-dev
-kubectl get all -n demo-app-prod
+# Check deployed resources per environment
+kubectl get all -n dev-demo-app
+kubectl get all -n production-api-app
 ```
 
 ### Access Applications
 ```bash
-# Access dev demo-app (port 8080)
-kubectl port-forward svc/demo-app-service -n demo-app-dev 8080:80
+# Access dev applications
+kubectl port-forward svc/demo-app-dev-service -n dev-demo-app 8080:80
+kubectl port-forward svc/api-app-dev-service -n dev-api-app 8090:3000
 
-# Access dev api-service (port 8082)
-kubectl port-forward svc/api-service -n demo-app-dev 8082:80
+# Access production applications
+kubectl port-forward svc/demo-app-production-service -n production-demo-app 8081:80
+kubectl port-forward svc/api-app-production-service -n production-api-app 8091:3000
 
-# Access production demo-app (port 8081)
-kubectl port-forward svc/demo-app-service -n demo-app-prod 8081:80
-
-# Access production api-service (port 8083)
-kubectl port-forward svc/api-service -n demo-app-prod 8083:80
-
-# Visit:
-# http://localhost:8080 (dev demo-app)
-# http://localhost:8081 (production demo-app)
-# http://localhost:8082 (dev api-service)
-# http://localhost:8083 (production api-service)
+# Visit the applications:
+# - Dev Demo App: http://localhost:8080
+# - Dev API App: http://localhost:8090
+# - Production Demo App: http://localhost:8081
+# - Production API App: http://localhost:8091
 ```
 
 ## 🧹 Cleanup
@@ -300,47 +357,26 @@ kubectl port-forward svc/api-service -n demo-app-prod 8083:80
 ./scripts/cleanup.sh
 
 # Or manually:
-kubectl delete application app-of-apps -n argocd  # This removes parent + all children
-kubectl delete namespace demo-app-dev demo-app-prod
+# Delete the environment controllers (this will cascade to individual applications)
+kubectl delete application dev-environment-controller -n argocd
+kubectl delete application production-environment-controller -n argocd
+
+# Clean up application namespaces
+kubectl delete namespace dev-demo-app dev-api-app production-demo-app production-api-app
 ```
-
-## 🆚 Comparison with Full Project
-
-| Feature | This Demo | Full Project |
-|---------|-----------|--------------|
-| **Pattern** | App-of-Apps with selective sync | ApplicationSet with advanced selective sync |
-| **Environments** | 2 (dev, production) | 3 (dev, staging, production) |
-| **Applications** | 7 total (1 root + 2 env controllers + 4 services) | 7 total (1 ApplicationSet + 6 generated apps) |
-| **Services** | 2 (demo-app, api-service) | 2 (demo-app, api-service) |
-| **Post-Sync Hooks** | Per service (dev: 10-15s, prod: 20-30s) | Advanced custom validation per app |
-| **Scripts** | 3 scripts | 8+ comprehensive scripts |
-| **Management** | Hierarchical (root → env → services) | Automated app generation |
-| **Complexity** | Intermediate (Proper App-of-Apps hierarchy) | Production-ready (Advanced patterns) |
 
 ## 💡 Key Takeaways
 
-1. **App-of-Apps Pattern**: Parent application manages multiple child applications for better organization
-2. **File-Pattern-Based Watching**: Each child application watches specific file patterns within the same directory
-3. **Service-Level Isolation**: Changes to one service only trigger syncs for that specific service's applications
-4. **Independent Syncing**: Changes only trigger syncs for applications watching the changed files
-5. **Resource Efficiency**: No unnecessary syncs or deployments across unrelated services
-6. **Scalable Architecture**: Easy to add new services or environments by adding new child applications
-7. **GitOps Best Practice**: Maintain separation of concerns between services and environments
+1. **App-of-Apps Pattern**: Environment controllers manage individual applications for better separation of concerns
+2. **Path-Based Watching**: Each individual ArgoCD application watches a specific directory path
+3. **Independent Syncing**: Changes only trigger syncs for applications watching the changed path
+4. **Per-App Customization**: Each application can have its own sync policies, retry logic, and post-sync hooks
+5. **Resource Efficiency**: No unnecessary syncs or deployments
+6. **Granular Control**: Fine-grained management of application lifecycle and validation
+7. **Environment Isolation**: Clear boundaries between environments via dedicated controllers
+8. **GitOps Best Practice**: Maintain separation of concerns with flexible deployment strategies
 
 ## 🔗 Learn More
 
-- **Full Implementation**: [argocd-selective-sync](https://github.com/nicholasadamou/argocd-selective-sync)
 - **ArgoCD Documentation**: [https://argo-cd.readthedocs.io/](https://argo-cd.readthedocs.io/)
 - **ApplicationSet Documentation**: [https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/](https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-**This demonstrates the App-of-Apps pattern with selective sync.** For a production-ready implementation with ApplicationSets, advanced selective sync features, comprehensive monitoring, and automated management scripts, see the [full argocd-selective-sync project](https://github.com/nicholasadamou/argocd-selective-sync).

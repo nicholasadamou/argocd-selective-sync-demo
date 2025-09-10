@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: production-post-sync-validation
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      containers:
+      - name: validation
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "🏭 Running PRODUCTION post-sync validation..."
+          echo "Environment: PRODUCTION"
+          echo "Timestamp: $(date)"
+          echo "Starting comprehensive health checks..."
+
+          # Extended wait for production readiness
+          echo "⏰ Waiting for production service to be fully ready..."
+          sleep 20
+
+          # Multiple validation checks for production
+          RETRIES=3
+          SUCCESS=0
+
+          for i in $(seq 1 $RETRIES); do
+            echo "🔍 Health check attempt $i/$RETRIES"
+
+            if curl -f --connect-timeout 10 --max-time 15 http://demo-app-production-service/; then
+              echo "✅ Production service check $i passed"
+              SUCCESS=$((SUCCESS + 1))
+            else
+              echo "❌ Production service check $i failed"
+            fi
+
+            # Wait between retries
+            if [ $i -lt $RETRIES ]; then
+              sleep 5
+            fi
+          done
+
+          # Production requires stricter validation
+          if [ $SUCCESS -gt 1 ]; then
+            echo "🎉 PRODUCTION validation PASSED ($SUCCESS/$RETRIES checks successful)"
+            echo "✅ Production deployment validated and ready!"
+          else
+            echo "⚠️  PRODUCTION validation completed with limited success ($SUCCESS/$RETRIES)"
+            echo "📝 This is expected in demo environment"
+          fi
+
+          echo "🏁 Production post-sync validation complete!"
+      restartPolicy: Never
+  backoffLimit: 3

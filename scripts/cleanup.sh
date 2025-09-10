@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # cleanup.sh
-# Script to clean up the ArgoCD selective sync demo
+# Script to clean up the ArgoCD app-of-apps pattern demo
 
 set -euo pipefail
 
@@ -31,7 +31,7 @@ log_error() {
 
 # Main cleanup function
 cleanup() {
-    log_info "Starting cleanup of ArgoCD selective sync demo..."
+    log_info "Starting cleanup of ArgoCD app-of-apps pattern demo..."
     echo
     
     # Check if kubectl is available
@@ -40,64 +40,41 @@ cleanup() {
         exit 1
     fi
     
-    # Remove environment controllers (ApplicationSets - this will cascade delete their managed apps)
+    # Remove environment controllers (this will automatically cascade to individual applications)
     log_info "Removing environment controllers..."
     
-    for controller in dev-controller production-controller; do
-        if kubectl get applicationset "$controller" -n argocd &> /dev/null; then
-            log_info "Removing controller: $controller"
-            kubectl delete applicationset "$controller" -n argocd
-            log_success "Controller $controller removed (child apps will be cascaded)"
+    for controller in dev-environment-controller production-environment-controller; do
+        if kubectl get application "$controller" -n default &> /dev/null; then
+            log_info "Removing environment controller: $controller"
+            kubectl delete application "$controller" -n default
+            log_success "Environment controller $controller removed"
         else
-            log_warning "Controller $controller not found"
+            log_warning "Environment controller $controller not found"
         fi
     done
     
-    # Clean up any remaining service applications in case they exist
-    log_info "Cleaning up any remaining service applications..."
+    # Wait a moment for environment controllers to clean up individual applications
+    log_info "Waiting for environment controllers to clean up individual applications..."
+    sleep 8
     
-    for app in dev-demo-app dev-api-service production-demo-app production-api-service; do
-        if kubectl get application "$app" -n argocd &> /dev/null; then
-            log_info "Removing application: $app"
-            kubectl delete application "$app" -n argocd
+    # Fallback: Remove any remaining individual applications
+    log_info "Checking for any remaining individual applications..."
+    for app in dev-demo-app dev-api-app production-demo-app production-api-app; do
+        if kubectl get application "$app" -n default &> /dev/null; then
+            log_info "Removing remaining application: $app"
+            kubectl delete application "$app" -n default
             log_success "Application $app removed"
         fi
     done
     
-    # Wait a moment for applications to be cleaned up
-    log_info "Waiting for applications to be cleaned up..."
-    sleep 10
-    
-    # Check for stuck applications and remove finalizers if needed
-    log_info "Checking for stuck applications with finalizers..."
-    local stuck_apps=()
-    for app in dev-demo-app dev-api-service production-demo-app production-api-service; do
-        if kubectl get application "$app" -n argocd &> /dev/null; then
-            stuck_apps+=("$app")
-        fi
-    done
-    
-    if [ ${#stuck_apps[@]} -gt 0 ]; then
-        log_warning "Found ${#stuck_apps[@]} stuck applications, removing finalizers..."
-        for app in "${stuck_apps[@]}"; do
-            log_info "Removing finalizers from $app"
-            kubectl patch application "$app" -n argocd --type merge --patch '{"metadata":{"finalizers":null}}' &> /dev/null || true
-            log_success "Finalizers removed from $app"
-        done
-        sleep 3
-    fi
-    
     # Remove namespaces
     log_info "Removing demo namespaces..."
     
-    for ns in demo-app-dev demo-app-prod; do
+    for ns in dev-demo-app dev-api-app production-demo-app production-api-app; do
         if kubectl get namespace "$ns" &> /dev/null; then
             log_info "Removing namespace: $ns"
-            kubectl delete namespace "$ns" --timeout=30s || {
-                log_warning "Namespace $ns is stuck, force deleting..."
-                kubectl delete namespace "$ns" --force --grace-period=0 &> /dev/null || true
-                log_success "Namespace $ns force deleted"
-            }
+            kubectl delete namespace "$ns" --timeout=60s
+            log_success "Namespace $ns removed"
         else
             log_warning "Namespace $ns not found"
         fi
@@ -108,27 +85,29 @@ cleanup() {
     log_info "Verifying cleanup..."
     
     # Check applications
-    local apps_count
-    apps_count=$(kubectl get applications -n argocd --no-headers 2>/dev/null | grep -cE "(app-of-apps|dev-apps|production-apps|dev-demo-app|dev-api-service|production-demo-app|production-api-service)" 2>/dev/null || echo "0")
+    local apps_remaining
+    apps_remaining=$(kubectl get applications -n default --no-headers 2>/dev/null | grep -E "(dev-demo-app|dev-api-app|production-demo-app|production-api-app|dev-environment-controller|production-environment-controller)" | wc -l 2>/dev/null || echo "0")
+    # Trim whitespace and ensure it's a valid integer
+    apps_remaining=$(echo "$apps_remaining" | tr -d '\n\r\t ' || echo "0")
+    apps_remaining=${apps_remaining:-0}
     
-    if [ "$apps_count" -eq 0 ] 2>/dev/null; then
+    if [ "$apps_remaining" -eq 0 ] 2>/dev/null; then
         log_success "✅ No demo applications remaining"
-    elif [[ "$apps_count" =~ ^[0-9]+$ ]] && [ "$apps_count" -gt 0 ]; then
-        log_warning "⚠️  $apps_count demo applications still exist"
     else
-        log_success "✅ No demo applications remaining"
+        log_warning "⚠️  $apps_remaining demo applications still exist"
     fi
     
     # Check namespaces
-    local ns_count
-    ns_count=$(kubectl get namespaces --no-headers 2>/dev/null | grep -cE "(demo-app-dev|demo-app-prod)" 2>/dev/null || echo "0")
+    local ns_remaining
+    ns_remaining=$(kubectl get namespaces --no-headers 2>/dev/null | grep -E "(dev-demo-app|dev-api-app|production-demo-app|production-api-app)" | wc -l 2>/dev/null || echo "0")
+    # Trim whitespace and ensure it's a valid integer
+    ns_remaining=$(echo "$ns_remaining" | tr -d '\n\r\t ' || echo "0")
+    ns_remaining=${ns_remaining:-0}
     
-    if [ "$ns_count" -eq 0 ] 2>/dev/null; then
+    if [ "$ns_remaining" -eq 0 ] 2>/dev/null; then
         log_success "✅ No demo namespaces remaining"
-    elif [[ "$ns_count" =~ ^[0-9]+$ ]] && [ "$ns_count" -gt 0 ]; then
-        log_warning "⚠️  $ns_count demo namespaces still exist"
     else
-        log_success "✅ No demo namespaces remaining"
+        log_warning "⚠️  $ns_remaining demo namespaces still exist"
     fi
     
     echo
@@ -142,16 +121,16 @@ cleanup() {
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo
-    echo "Clean up the ArgoCD selective sync demo"
+    echo "Clean up the ArgoCD app-of-apps pattern demo"
     echo
     echo "Options:"
     echo "  -h, --help    Show this help message"
     echo "  -f, --force   Skip confirmation prompt"
     echo
     echo "This will remove:"
-    echo "  • Environment controllers: dev-controller, production-controller"
-    echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
-    echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
+    echo "  • Environment controllers: dev-environment-controller, production-environment-controller"
+    echo "  • Applications: dev-demo-app, dev-api-app, production-demo-app, production-api-app"
+    echo "  • Namespaces: dev-demo-app, dev-api-app, production-demo-app, production-api-app"
     echo "  • Post-sync validation jobs"
     echo
     echo "ArgoCD itself will remain running."
@@ -181,10 +160,10 @@ main() {
     done
     
     echo
-    log_warning "This will remove the ArgoCD standalone controllers selective sync demo:"
-    echo "  • Environment controllers: dev-controller, production-controller"
-    echo "  • Service applications: dev-demo-app, dev-api-service, production-demo-app, production-api-service"
-    echo "  • Namespaces 'demo-app-dev' and 'demo-app-prod'"
+    log_warning "This will remove the ArgoCD app-of-apps pattern demo:"
+    echo "  • Environment controllers: dev-environment-controller, production-environment-controller"
+    echo "  • Applications: dev-demo-app, dev-api-app, production-demo-app, production-api-app"
+    echo "  • Namespaces: dev-demo-app, dev-api-app, production-demo-app, production-api-app"
     echo "  • Post-sync validation jobs"
     echo
     log_info "ArgoCD itself will remain running."

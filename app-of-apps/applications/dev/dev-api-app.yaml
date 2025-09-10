@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dev-api-app
+  namespace: argocd
+  labels:
+    environment: dev
+    service: api-app
+    app-type: api-app
+    managed-by: dev-environment-controller
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"  # Deploy after environment controller
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
+    targetRevision: HEAD
+    path: environments/dev-api-app
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev-api-app
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=true
+    automated:
+      selfHeal: true
+      prune: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  # Configure health checks for API application
+  ignoreDifferences:
+  - group: batch
+    kind: Job
+    name: dev-api-post-sync-validation
+    jsonPointers:
+    - /spec/template/spec/containers/0/env
