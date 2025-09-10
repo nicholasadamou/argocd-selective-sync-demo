@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ArgoCD GitLab Repository Secret Setup Script
-# This script helps you securely configure GitLab repository access for ArgoCD
+# ArgoCD GitHub Repository Secret Setup Script
+# This script helps you securely configure GitHub repository access for ArgoCD
 # with multiple credential input methods and no inline credential usage
 
 set -e
 
-echo "🔐 ArgoCD GitLab Repository Secret Setup"
+echo "🔐 ArgoCD GitHub Repository Secret Setup"
 echo "=================================================="
 echo ""
 
@@ -30,9 +30,9 @@ echo ""
 get_credentials() {
     echo "🔑 Choose credential input method:"
     echo "1) Interactive input (default)"
-    echo "2) Environment variables (GITLAB_USERNAME, GITLAB_TOKEN)"
-    echo "3) Credential file (~/.config/gitlab/credentials)"
-    echo "4) GitLab CLI (glab)"
+    echo "2) Environment variables (GITHUB_USERNAME, GITHUB_TOKEN)"
+    echo "3) Credential file (~/.config/github/credentials)"
+    echo "4) GitHub CLI (gh)"
     echo ""
     read -p "Enter choice [1-4] (default: 1): " CRED_METHOD
     CRED_METHOD=${CRED_METHOD:-1}
@@ -40,49 +40,49 @@ get_credentials() {
     case $CRED_METHOD in
         1)
             echo "📝 Interactive credential input:"
-            read -p "Enter your GitLab username: " GITLAB_USERNAME
-            read -s -p "Enter your GitLab Personal Access Token: " GITLAB_TOKEN
+            read -p "Enter your GitHub username: " GITHUB_USERNAME
+            read -s -p "Enter your GitHub Personal Access Token: " GITHUB_TOKEN
             echo ""
             ;;
         2)
             echo "🌍 Using environment variables..."
-            if [[ -z "$GITLAB_USERNAME" || -z "$GITLAB_TOKEN" ]]; then
-                echo "❌ GITLAB_USERNAME and GITLAB_TOKEN environment variables must be set"
-                echo "   Example: export GITLAB_USERNAME=yourusername"
-                echo "   Example: export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx"
+            if [[ -z "$GITHUB_USERNAME" || -z "$GITHUB_TOKEN" ]]; then
+                echo "❌ GITHUB_USERNAME and GITHUB_TOKEN environment variables must be set"
+                echo "   Example: export GITHUB_USERNAME=yourusername"
+                echo "   Example: export GITHUB_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
                 exit 1
             fi
             ;;
         3)
             echo "📄 Using credential file..."
-            CRED_FILE="$HOME/.config/gitlab/credentials"
+            CRED_FILE="$HOME/.config/github/credentials"
             if [[ ! -f "$CRED_FILE" ]]; then
                 echo "❌ Credential file not found: $CRED_FILE"
                 echo "   Create the file with the following format:"
-                echo "   GITLAB_USERNAME=yourusername"
-                echo "   GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx"
+                echo "   GITHUB_USERNAME=yourusername"
+                echo "   GITHUB_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
                 exit 1
             fi
             # Source the credential file in a subshell to avoid polluting environment
             eval $(cat "$CRED_FILE")
             ;;
         4)
-            echo "🛠️ Using GitLab CLI (glab)..."
-            if ! command -v glab &> /dev/null; then
-                echo "❌ glab CLI is not installed"
-                echo "   Install from: https://gitlab.com/gitlab-org/cli"
+            echo "🛠️ Using GitHub CLI (gh)..."
+            if ! command -v gh &> /dev/null; then
+                echo "❌ gh CLI is not installed"
+                echo "   Install from: https://cli.github.com/"
                 exit 1
             fi
             # Get current user info to extract username
-            GITLAB_USERNAME=$(glab api user --jq '.username' 2>/dev/null)
-            # glab doesn't expose tokens directly, so we need to check auth status
-            if ! glab auth status &>/dev/null; then
-                echo "❌ glab is not authenticated"
-                echo "   Run: glab auth login"
+            GITHUB_USERNAME=$(gh api user -q .login 2>/dev/null)
+            # Ensure gh is authenticated
+            if ! gh auth status &>/dev/null; then
+                echo "❌ gh is not authenticated"
+                echo "   Run: gh auth login"
                 exit 1
             fi
-            echo "ℹ️  Using glab authentication for user: $GITLAB_USERNAME"
-            GITLAB_TOKEN="__GLAB_TOKEN__"  # Special marker for glab usage
+            echo "ℹ️  Using gh authentication for user: $GITHUB_USERNAME"
+            GITHUB_TOKEN="__GH_TOKEN__"  # Special marker for gh usage
             ;;
         *)
             echo "❌ Invalid choice"
@@ -90,7 +90,7 @@ get_credentials() {
             ;;
     esac
 
-    if [[ -z "$GITLAB_USERNAME" || -z "$GITLAB_TOKEN" ]]; then
+    if [[ -z "$GITHUB_USERNAME" || -z "$GITHUB_TOKEN" ]]; then
         echo "❌ Username and token are required"
         exit 1
     fi
@@ -98,25 +98,25 @@ get_credentials() {
 
 # Function to test repository access securely
 test_repository_access() {
-    local repo_url="https://gitlab.us.lmco.com/nicholasadamou/argocd-selective-sync-demo.git"
+    local repo_url="https://github.com/nicholasadamou/argocd-selective-sync-demo.git"
     local test_dir=$(mktemp -d)
     
-    echo "🧪 Testing GitLab repository access..."
-    echo "======================================="
+    echo "🧪 Testing GitHub repository access..."
+    echo "======================================"
     echo "📁 Using temporary directory: $test_dir"
     
     # Configure git credentials based on method used
-    if [[ "$GITLAB_TOKEN" == "__GLAB_TOKEN__" ]]; then
-        # Use glab for authentication
-        echo "🔧 Configuring glab authentication..."
+    if [[ "$GITHUB_TOKEN" == "__GH_TOKEN__" ]]; then
+        # Use gh for authentication
+        echo "🔧 Configuring gh authentication..."
         export GIT_CONFIG_GLOBAL=/dev/null
         export GIT_CONFIG_SYSTEM=/dev/null
         
-        # Create git config that uses glab for credentials
+        # Create git config that uses gh for credentials
         local temp_git_config="$test_dir/.gitconfig"
         cat > "$temp_git_config" << EOF
-[credential "https://gitlab.us.lmco.com"]
-	helper = !glab auth git-credential
+[credential "https://github.com"]
+	helper = !gh auth git-credential
 EOF
         export GIT_CONFIG="$temp_git_config"
     else
@@ -127,8 +127,8 @@ EOF
         
         local temp_git_config="$test_dir/.gitconfig"
         cat > "$temp_git_config" << EOF
-[credential "https://gitlab.us.lmco.com"]
-	helper = !f() { echo "username=$GITLAB_USERNAME"; echo "password=$GITLAB_TOKEN"; }; f
+[credential "https://github.com"]
+	helper = !f() { echo "username=$GITHUB_USERNAME"; echo "password=$GITHUB_TOKEN"; }; f
 EOF
         export GIT_CONFIG="$temp_git_config"
     fi
@@ -142,7 +142,7 @@ EOF
         echo "❌ FAILED: Cannot clone repository with provided credentials"
         echo "   This could mean:"
         echo "   - Invalid username or token"
-        echo "   - Token lacks 'read_repository' scope"
+        echo "   - Token lacks 'repo' scope or read access"
         echo "   - Repository URL is incorrect"
         echo "   - Network connectivity issues"
         local clone_success=false
@@ -181,7 +181,7 @@ EOF
     
     # Cleanup credentials and temporary files
     echo "🧹 Cleaning up temporary files and credentials..."
-    unset GITLAB_USERNAME GITLAB_TOKEN GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM
+    unset GITHUB_USERNAME GITHUB_TOKEN GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM
     rm -rf "$test_dir"
     
     # Results summary
@@ -205,40 +205,40 @@ EOF
 # Main execution
 get_credentials
 
-echo "🔄 Creating GitLab repository secret..."
+echo "🔄 Creating GitHub repository secret..."
 
 # Delete existing secrets if they exist
-kubectl delete secret gitlab-repo-secret gitlab-repo-secret-token gitlab-private-repo -n default --ignore-not-found=true
+kubectl delete secret github-repo-secret github-repo-secret-token github-private-repo -n default --ignore-not-found=true
 
 # Create the secret (credentials never appear inline here)
-kubectl create secret generic gitlab-private-repo \
+kubectl create secret generic github-private-repo \
     --namespace=default \
     --from-literal=type=git \
-    --from-literal=url=https://gitlab.us.lmco.com/nicholasadamou/argocd-selective-sync-demo.git \
-    --from-literal=username="$GITLAB_USERNAME" \
-    --from-literal=password="$GITLAB_TOKEN" \
+    --from-literal=url=https://github.com/nicholasadamou/argocd-selective-sync-demo.git \
+    --from-literal=username="$GITHUB_USERNAME" \
+    --from-literal=password="$GITHUB_TOKEN" \
     --from-literal=insecure="false" \
     --from-literal=enableLfs="false"
 
 # Label the secret
-kubectl label secret gitlab-private-repo argocd.argoproj.io/secret-type=repository -n default
+kubectl label secret github-private-repo argocd.argoproj.io/secret-type=repository -n default
 
-echo "✅ GitLab repository secret created successfully!"
+echo "✅ GitHub repository secret created successfully!"
 echo ""
 echo "🔍 Verifying secret..."
-kubectl get secret gitlab-private-repo -n default -o jsonpath='{.metadata.labels}' | grep -q "repository" && echo "✅ Secret is properly labeled"
+kubectl get secret github-private-repo -n default -o jsonpath='{.metadata.labels}' | grep -q "repository" && echo "✅ Secret is properly labeled"
 
 # Test repository access
 echo ""
 if test_repository_access; then
-    echo "🎉 Setup complete! Your GitLab repository is now configured for ArgoCD."
+    echo "🎉 Setup complete! Your GitHub repository is now configured for ArgoCD."
 else
     echo "⚠️  Setup completed but credential tests failed"
-    echo "🔧 Please check your GitLab credentials and permissions before proceeding"
+    echo "🔧 Please check your GitHub credentials and permissions before proceeding"
 fi
 
 # Clear any remaining credential variables
-unset GITLAB_USERNAME GITLAB_TOKEN
+unset GITHUB_USERNAME GITHUB_TOKEN
 
 echo ""
 echo "📝 Next steps:"
