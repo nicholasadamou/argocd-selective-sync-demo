@@ -150,6 +150,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 # Clone this demo repository
 git clone https://github.com/nicholasadamou/argocd-selective-sync-demo.git
 cd argocd-selective-sync-demo
+git checkout feature/app-of-apps-selective-sync
 
 # Configure GitHub repository access (REQUIRED for private repos)
 # See docs/SECRETS-README.md for detailed instructions
