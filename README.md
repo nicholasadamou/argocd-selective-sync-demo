@@ -45,7 +45,6 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 │       └── production/
 │           ├── production-api-app.yaml
 │           └── production-demo-app.yaml
-├── old-controllers/                # Legacy environment-wide controllers
 │   ├── dev-controller.yaml        # Moved from root
 │   └── production-controller.yaml # Moved from root
 └── environments/                   # Application manifests (workloads)
