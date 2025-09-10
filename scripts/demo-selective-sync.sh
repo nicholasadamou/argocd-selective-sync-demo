@@ -5,6 +5,15 @@
 
 set -euo pipefail
 
+# Cleanup function for trap
+cleanup_on_exit() {
+    # Clean up any .bak files that might have been left behind
+    find . -name "*.bak" -type f -delete 2>/dev/null || true
+}
+
+# Set trap for cleanup on script exit
+trap cleanup_on_exit EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -141,6 +150,9 @@ make_selective_change() {
     
     # Make the change
     sed -i.bak "s/replicas: $current_replicas/replicas: $new_replicas/" environments/dev-api-app/deployment.yaml
+    
+    # Clean up the .bak file created by sed
+    rm -f environments/dev-api-app/deployment.yaml.bak
     
     log_info "File changed:"
     echo "  environments/dev-api-app/deployment.yaml: replicas $current_replicas → $new_replicas"
@@ -355,6 +367,11 @@ cleanup_demo() {
     else
         log_info "No demo commit found to revert"
     fi
+    
+    # Clean up any remaining .bak files
+    log_step "Cleaning up temporary files..."
+    find . -name "*.bak" -type f -delete 2>/dev/null || true
+    log_success "Temporary files cleaned up"
     
     echo
 }
