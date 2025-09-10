@@ -17,22 +17,18 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 .
 ├── README.md                        # This file - main project documentation
 ├── github-repo-secret.template.yaml # Template for GitHub repository access
+├── github-repo-secret.yaml          # Actual secret file (ignored by Git)
 ├── .gitignore                       # Excludes secrets from version control
 ├── docs/                           # Documentation
 │   └── SECRETS-README.md           # Secret management guide
 ├── scripts/                        # Utility scripts
 │   ├── setup-secrets.sh            # Interactive secret setup with testing
-│   ├── deploy-controllers.sh       # Deploy service-specific controllers
+│   ├── credentials.example          # Example credential file
+│   ├── demo-selective-sync.sh       # Selective sync demonstration
+│   ├── demo-hooks.sh               # Post-sync hooks demonstration
+│   ├── deploy-demo.sh              # Deploy demo applications
 │   └── cleanup.sh                  # Enhanced cleanup for argocd namespace
-├── apps/                          # Service-specific controller structure (NEW)
-│   └── controllers/               # Individual service controllers
-│       ├── README.md              # Controller documentation
-│       ├── demo-app-dev-controller.yaml
-│       ├── demo-app-production-controller.yaml
-│       ├── api-service-dev-controller.yaml
-│       ├── api-service-production-controller.yaml
-│       └── master-controller.yaml # App-of-Apps controller for git-based deployment
-├── app-of-apps/                    # Original App-of-Apps pattern structure
+├── app-of-apps/                    # App-of-Apps pattern structure
 │   ├── environments/               # Environment controllers (parent apps)
 │   │   ├── dev/
 │   │   │   └── dev-environment-controller.yaml
@@ -46,24 +42,6 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 │           ├── production-api-app.yaml
 │           └── production-demo-app.yaml
 └── environments/                   # Application manifests (workloads)
-    ├── api-service/               # API service environments
-    │   ├── dev/
-    │   │   ├── deployment.yaml
-    │   │   ├── service.yaml
-    │   │   └── post-sync-hook.yaml
-    │   └── production/
-    │       ├── deployment.yaml
-    │       ├── service.yaml (NodePort for kind compatibility)
-    │       └── post-sync-hook.yaml
-    ├── demo-app/                  # Demo app environments
-    │   ├── dev/
-    │   │   ├── deployment.yaml
-    │   │   ├── service.yaml
-    │   │   └── post-sync-hook.yaml
-    │   └── production/
-    │       ├── deployment.yaml
-    │       ├── service.yaml (NodePort for kind compatibility)
-    │       └── post-sync-hook.yaml
     ├── dev-api-app/              # Development API app manifests
     │   ├── deployment.yaml
     │   ├── service.yaml
@@ -88,24 +66,7 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 
 ### App-of-Apps Architecture
 
-This demo now supports **two deployment patterns**:
-
-#### ✨ **NEW: Service-Specific Controllers** (Recommended)
-
-**Individual ApplicationSet controllers for each service/environment combination:**
-1. **`demo-app-dev-controller`** → Manages `dev-demo-app` application
-2. **`demo-app-production-controller`** → Manages `production-demo-app` application  
-3. **`api-service-dev-controller`** → Manages `dev-api-service` application
-4. **`api-service-production-controller`** → Manages `production-api-service` application
-
-**Benefits:**
-- ✅ **Granular Control**: Each service can be managed independently
-- ✅ **Environment Isolation**: Dev and production controllers are completely separate
-- ✅ **Selective Deployment**: Deploy only specific service controllers as needed
-- ✅ **Enhanced Labeling**: Better labels for filtering and management
-- ✅ **Easier Troubleshooting**: Issues isolated to specific service/environment combinations
-
-#### 🔄 **Environment Controllers**
+### Environment Controllers Pattern
 
 1. **Environment Controllers** (Parent Apps):
    - `dev-environment-controller` manages all dev applications
@@ -194,9 +155,8 @@ cd argocd-selective-sync-demo
 # See docs/SECRETS-README.md for detailed instructions
 ./scripts/setup-secrets.sh
 
-# OPTION 1: Deploy service-specific controllers (NEW - Recommended)
-# Individual controllers for each service in each environment
-./scripts/deploy-controllers.sh
+# Deploy the app-of-apps environment controllers
+./scripts/deploy-demo.sh
 
 # OPTION 2: Deploy App-of-Apps environment controllers (Original pattern)
 # Environment controllers which manage individual applications
