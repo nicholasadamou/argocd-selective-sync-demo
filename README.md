@@ -64,19 +64,19 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
     │       ├── deployment.yaml
     │       ├── service.yaml (NodePort for kind compatibility)
     │       └── post-sync-hook.yaml
-    ├── dev-api-app/              # Legacy structure (still used by app-of-apps)
+    ├── dev-api-app/              # Development API app manifests
     │   ├── deployment.yaml
     │   ├── service.yaml
     │   └── post-sync-hook.yaml
-    ├── dev-demo-app/             # Legacy structure (still used by app-of-apps)
+    ├── dev-demo-app/             # Development demo app manifests
     │   ├── deployment.yaml
     │   ├── service.yaml
     │   └── post-sync-hook.yaml
-    ├── production-api-app/       # Legacy structure (still used by app-of-apps)
+    ├── production-api-app/       # Production API app manifests
     │   ├── deployment.yaml
     │   ├── service.yaml (NodePort)
     │   └── post-sync-hook.yaml
-    └── production-demo-app/      # Legacy structure (still used by app-of-apps)
+    └── production-demo-app/      # Production demo app manifests
         ├── deployment.yaml
         ├── service.yaml (NodePort)
         └── post-sync-hook.yaml
@@ -105,7 +105,7 @@ This demo now supports **two deployment patterns**:
 - ✅ **Enhanced Labeling**: Better labels for filtering and management
 - ✅ **Easier Troubleshooting**: Issues isolated to specific service/environment combinations
 
-#### 🔄 **Original: Environment Controllers** (Legacy)
+#### 🔄 **Environment Controllers**
 
 1. **Environment Controllers** (Parent Apps):
    - `dev-environment-controller` manages all dev applications
