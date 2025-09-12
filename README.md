@@ -160,6 +160,10 @@ This demo requires the Helm repository setup with Nexus:
 ### 1. Install ArgoCD and Argo Workflows (if not already installed)
 
 ```bash
+# Install ArgoCD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
 # Install Argo Workflows
 kubectl create namespace argo
 kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.4.4/install.yaml
