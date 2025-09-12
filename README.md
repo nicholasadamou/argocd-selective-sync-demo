@@ -127,7 +127,7 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 
 ### Argo Workflows for Validation (Per Application)
 - **Dev API Workflow**: API-specific validation (15s wait, single attempt, API endpoint checks)
-- **Dev Demo Workflow**: Quick validation (10s wait, single attempt, basic health check)  
+- **Dev Demo Workflow**: Quick validation (10s wait, single attempt, basic health check)
 - **Production API Workflow**: Comprehensive API validation (30s wait, 5 retries, multiple endpoints)
 - **Production Demo Workflow**: Enhanced validation (20s wait, 3 retries, comprehensive checks)
 
@@ -166,7 +166,7 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 
 # Install Argo Workflows
 kubectl create namespace argo
-kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.4.4/install.yaml
+kubectl apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.7.2/install.yaml
 
 # Wait for services to be ready
 kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
@@ -330,7 +330,7 @@ For comprehensive secret management documentation, see:
 
 # This command will:
 # 1. Update replicas in environments/dev-api-app/templates/deployment.yaml
-# 2. Bump the chart version in environments/dev-api-app/Chart.yaml  
+# 2. Bump the chart version in environments/dev-api-app/Chart.yaml
 # 3. Rebuild and upload Helm packages to Nexus
 # 4. Update targetRevision in app-of-apps/applications/dev/templates/dev-api-app.yaml
 # 5. Commit and push all changes
@@ -378,7 +378,7 @@ kubectl get pods -l workflows.argoproj.io/workflow -n production-demo-app
 vim environments/dev-api-app/templates/deployment.yaml  # Change image to nginx:1.22
 ./scripts/helm/helm-workflow.sh bump-version dev-api-app patch
 
-# Then update production-api-app  
+# Then update production-api-app
 vim environments/production-api-app/templates/deployment.yaml  # Change image to nginx:1.22
 ./scripts/helm/helm-workflow.sh bump-version production-api-app patch
 
@@ -504,7 +504,7 @@ kubectl describe application production-api-app -n argocd
 # Check validation workflows
 kubectl get workflows --all-namespaces
 
-# View workflow execution logs 
+# View workflow execution logs
 kubectl get pods -l workflows.argoproj.io/workflow --all-namespaces
 kubectl logs -l workflows.argoproj.io/workflow --all-namespaces
 
