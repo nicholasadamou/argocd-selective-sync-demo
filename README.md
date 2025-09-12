@@ -187,7 +187,30 @@ Open browser to `https://localhost:8080/argocd`
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode && echo
 ```
 
-### 3. Clone and Deploy Demo
+### 3. Access Argo Workflows UI (Optional)
+
+```bash
+# Port forward to access Argo Workflows UI locally
+kubectl port-forward svc/argo-server -n argo 2746:2746
+```
+
+Open browser to `https://localhost:2746`
+
+**Note:** Argo Workflows UI uses HTTPS by default. You may need to accept the self-signed certificate warning in your browser.
+
+**For simplified access without authentication (dev/demo only):**
+```bash
+# Patch the argo-server to disable authentication (NOT for production)
+kubectl patch deployment argo-server -n argo -p '{"spec":{"template":{"spec":{"containers":[{"name":"argo-server","args":["server","--auth-mode=server"]}]}}}}'
+
+# Wait for deployment to restart
+kubectl rollout status deployment/argo-server -n argo
+
+# Now access without authentication
+kubectl port-forward svc/argo-server -n argo 2746:2746
+```
+
+### 4. Clone and Deploy Demo
 
 ```bash
 # Clone this demo repository
@@ -211,7 +234,7 @@ kubectl apply -f app-of-apps/environments/production/production-environment-cont
 ./scripts/deploy-demo.sh
 ```
 
-### 4. Verify Setup
+### 5. Verify Setup
 
 ```bash
 # Check Argo Workflows are installed
