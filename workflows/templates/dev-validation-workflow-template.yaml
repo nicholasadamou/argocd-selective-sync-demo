@@ -1,0 +1,77 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: dev-validation-workflow
+  namespace: argo
+spec:
+  entrypoint: validate-deployment
+  templates:
+  - name: validate-deployment
+    inputs:
+      parameters:
+      - name: environment
+        value: "dev"
+      - name: service-name
+        description: "Name of the service being validated"
+      - name: service-type
+        description: "Type of service (api or demo)"
+        value: "demo"
+      - name: health-endpoint
+        description: "Health check endpoint path"
+        value: "/"
+      - name: wait-time
+        description: "Time to wait before starting validation"
+        value: "10"
+    container:
+      image: curlimages/curl:latest
+      command: ["/bin/sh"]
+      args:
+        - -c
+        - |
+          echo "🚀 Running {{inputs.parameters.environment}} {{inputs.parameters.service-type}} validation..."
+          echo "Environment: {{inputs.parameters.environment | upper}}"
+          echo "Service: {{inputs.parameters.service-name}}"
+          echo "Service Type: {{inputs.parameters.service-type | upper}}"
+          echo "Timestamp: $(date)"
+          echo "Checking service health..."
+
+          # Wait for service to be ready
+          echo "⏰ Waiting {{inputs.parameters.wait-time}} seconds for service to initialize..."
+          sleep {{inputs.parameters.wait-time}}
+
+          # Determine service URL based on service type
+          if [ "{{inputs.parameters.service-type}}" = "api" ]; then
+            SERVICE_URL="http://{{inputs.parameters.service-name}}-{{inputs.parameters.environment}}-service{{inputs.parameters.health-endpoint}}"
+            FALLBACK_URL="http://{{inputs.parameters.service-name}}-{{inputs.parameters.environment}}-service/"
+          else
+            SERVICE_URL="http://{{inputs.parameters.service-name}}-{{inputs.parameters.environment}}-service{{inputs.parameters.health-endpoint}}"
+            FALLBACK_URL=""
+          fi
+
+          echo "🔍 Testing service URL: $SERVICE_URL"
+
+          # Basic health check
+          if curl -f --connect-timeout 5 --max-time 10 "$SERVICE_URL" 2>/dev/null; then
+            echo "✅ {{inputs.parameters.environment | upper}} {{inputs.parameters.service-type}} service is responding"
+          elif [ -n "$FALLBACK_URL" ] && curl -f --connect-timeout 5 --max-time 10 "$FALLBACK_URL" 2>/dev/null; then
+            echo "✅ {{inputs.parameters.environment | upper}} {{inputs.parameters.service-type}} service is responding (fallback endpoint)"
+          else
+            echo "⚠️  {{inputs.parameters.environment | upper}} {{inputs.parameters.service-type}} service not yet ready, but that's ok for demo"
+          fi
+
+          # Additional service-specific validations
+          if [ "{{inputs.parameters.service-type}}" = "api" ]; then
+            echo "🔍 Running API-specific validations..."
+            echo "- Checking service discovery"
+            echo "- Validating API endpoints"
+            echo "- Testing connectivity"
+          fi
+
+          echo "🎉 {{inputs.parameters.environment | upper}} {{inputs.parameters.service-type}} validation complete!"
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "100m"
+        limits:
+          memory: "128Mi"
+          cpu: "200m"

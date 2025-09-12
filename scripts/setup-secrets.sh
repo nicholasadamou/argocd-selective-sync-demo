@@ -49,7 +49,7 @@ get_credentials() {
             if [[ -z "$GITHUB_USERNAME" || -z "$GITHUB_TOKEN" ]]; then
                 echo "❌ GITHUB_USERNAME and GITHUB_TOKEN environment variables must be set"
                 echo "   Example: export GITHUB_USERNAME=yourusername"
-                echo "   Example: export GITHUB_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                echo "   Example: export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx"
                 exit 1
             fi
             ;;
@@ -60,7 +60,7 @@ get_credentials() {
                 echo "❌ Credential file not found: $CRED_FILE"
                 echo "   Create the file with the following format:"
                 echo "   GITHUB_USERNAME=yourusername"
-                echo "   GITHUB_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                echo "   GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx"
                 exit 1
             fi
             # Source the credential file in a subshell to avoid polluting environment
@@ -74,8 +74,8 @@ get_credentials() {
                 exit 1
             fi
             # Get current user info to extract username
-            GITHUB_USERNAME=$(gh api user -q .login 2>/dev/null)
-            # Ensure gh is authenticated
+            GITHUB_USERNAME=$(gh api user --jq '.login' 2>/dev/null)
+            # gh doesn't expose tokens directly, so we need to check auth status
             if ! gh auth status &>/dev/null; then
                 echo "❌ gh is not authenticated"
                 echo "   Run: gh auth login"
@@ -102,7 +102,7 @@ test_repository_access() {
     local test_dir=$(mktemp -d)
     
     echo "🧪 Testing GitHub repository access..."
-    echo "======================================"
+    echo "======================================="
     echo "📁 Using temporary directory: $test_dir"
     
     # Configure git credentials based on method used
@@ -142,7 +142,7 @@ EOF
         echo "❌ FAILED: Cannot clone repository with provided credentials"
         echo "   This could mean:"
         echo "   - Invalid username or token"
-        echo "   - Token lacks 'repo' scope or read access"
+        echo "   - Token lacks 'read_repository' scope"
         echo "   - Repository URL is incorrect"
         echo "   - Network connectivity issues"
         local clone_success=false
@@ -208,25 +208,25 @@ get_credentials
 echo "🔄 Creating GitHub repository secret..."
 
 # Delete existing secrets if they exist
-kubectl delete secret github-repo-secret github-repo-secret-token github-private-repo -n default --ignore-not-found=true
+kubectl delete secret github-private-repo github-repo-secret github-repo-secret-token -n argocd --ignore-not-found=true
 
 # Create the secret (credentials never appear inline here)
 kubectl create secret generic github-private-repo \
-    --namespace=default \
+    --namespace=argocd
     --from-literal=type=git \
-    --from-literal=url=https://github.com/nicholasadamou/argocd-selective-sync-demo.git \
+    --from-literal=url=https://github.com/nicholasadamou/argocd-selective-sync-demo.git
     --from-literal=username="$GITHUB_USERNAME" \
-    --from-literal=password="$GITHUB_TOKEN" \
+    --from-literal=password="$GITHUB_TOKEN"
     --from-literal=insecure="false" \
     --from-literal=enableLfs="false"
 
 # Label the secret
-kubectl label secret github-private-repo argocd.argoproj.io/secret-type=repository -n default
+kubectl label secret github-private-repo argocd.argoproj.io/secret-type=repository -n argocd
 
 echo "✅ GitHub repository secret created successfully!"
 echo ""
 echo "🔍 Verifying secret..."
-kubectl get secret github-private-repo -n default -o jsonpath='{.metadata.labels}' | grep -q "repository" && echo "✅ Secret is properly labeled"
+kubectl get secret github-private-repo -n argocd -o jsonpath='{.metadata.labels}' | grep -q "repository" && echo "✅ Secret is properly labeled"
 
 # Test repository access
 echo ""

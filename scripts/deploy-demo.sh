@@ -13,6 +13,9 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
+# Global variables
+USING_HELM=true  # This demo is Helm-only now
+
 # Functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -32,6 +35,16 @@ log_error() {
 
 log_header() {
     echo -e "${PURPLE}$1${NC}"
+}
+
+# Detect if using Helm charts
+detect_helm_usage() {
+    # Check if ArgoCD apps are configured to use Helm charts
+    if grep -q "chart:" app-of-apps/applications/dev/templates/dev-api-app.yaml 2>/dev/null; then
+        return 0  # Using Helm
+    else
+        return 1  # Using Git
+    fi
 }
 
 # Check prerequisites
@@ -60,7 +73,27 @@ check_prerequisites() {
         exit 1
     fi
     
-    log_success "Prerequisites check passed"
+    # Detect deployment mode and check specific prerequisites
+    if detect_helm_usage; then
+        log_info "Detected Helm-based ArgoCD configuration"
+        USING_HELM=true
+        
+        log_info "Helm workflow setup - additional setup may be required:"
+        log_info "• For full functionality, ensure Nexus repository is set up:"
+        echo "  ./scripts/helm/setup-nexus.sh"
+        log_info "• Helm packages should be built and uploaded:"
+        echo "  ./scripts/helm/build-helm-packages.sh"
+        echo "  ./scripts/helm/upload-helm-packages.sh"
+        log_info "• Or use automated workflow management:"
+        echo "  ./scripts/helm/helm-workflow.sh scale-and-publish dev-api-app 2"
+    else
+        log_error "This demo now requires Helm-based ArgoCD configuration!"
+        log_info "Please ensure your ArgoCD applications are configured to use Helm charts from Nexus."
+        log_info "Check that app-of-apps/applications/dev/templates/dev-api-app.yaml contains 'chart:' field."
+        exit 1
+    fi
+    
+    log_success "Prerequisites check passed (Helm-only mode)"
 }
 
 # Deploy App-of-Apps
@@ -85,8 +118,8 @@ deploy_applications() {
     # Check initial status
     log_info "Checking environment controller status..."
     local dev_status prod_status
-    dev_status=$(kubectl get application dev-environment-controller -n default -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Pending")
-    prod_status=$(kubectl get application production-environment-controller -n default -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Pending")
+    dev_status=$(kubectl get application dev-environment-controller -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Pending")
+    prod_status=$(kubectl get application production-environment-controller -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Pending")
     
     log_info "Dev environment controller: $dev_status"
     log_info "Production environment controller: $prod_status"
@@ -105,9 +138,9 @@ wait_for_applications() {
     while [ $attempt -lt $max_attempts ]; do
         local apps_found=0
         
-        # Check for all 4 applications in default namespace
+        # Check for all 4 applications in argocd namespace
         for app in dev-demo-app dev-api-app production-demo-app production-api-app; do
-            if kubectl get application "$app" -n default &> /dev/null; then
+            if kubectl get application "$app" -n argocd &> /dev/null; then
                 apps_found=$((apps_found + 1))
             fi
         done
@@ -123,8 +156,8 @@ wait_for_applications() {
         if [ $attempt -eq 8 ] || [ $attempt -eq 15 ]; then
             log_info "Checking environment controller status..."
             local dev_sync_status prod_sync_status
-            dev_sync_status=$(kubectl get application dev-environment-controller -n default -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-            prod_sync_status=$(kubectl get application production-environment-controller -n default -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            dev_sync_status=$(kubectl get application dev-environment-controller -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            prod_sync_status=$(kubectl get application production-environment-controller -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
             
             log_info "Dev environment controller sync status: $dev_sync_status"
             log_info "Production environment controller sync status: $prod_sync_status"
@@ -144,8 +177,8 @@ wait_for_applications() {
     
     # Show environment controller status
     local dev_status prod_status
-    dev_status=$(kubectl get application dev-environment-controller -n default -o jsonpath='{.status.operationState.message}' 2>/dev/null || echo "Unable to get status")
-    prod_status=$(kubectl get application production-environment-controller -n default -o jsonpath='{.status.operationState.message}' 2>/dev/null || echo "Unable to get status")
+    dev_status=$(kubectl get application dev-environment-controller -n argocd -o jsonpath='{.status.operationState.message}' 2>/dev/null || echo "Unable to get status")
+    prod_status=$(kubectl get application production-environment-controller -n argocd -o jsonpath='{.status.operationState.message}' 2>/dev/null || echo "Unable to get status")
     
     log_warning "Dev environment controller status: $dev_status"
     log_warning "Production environment controller status: $prod_status"
@@ -157,7 +190,7 @@ wait_for_applications() {
         echo "  2. Repository credentials are properly configured"
         echo "  3. Repository exists and is accessible"
         echo "  "
-        log_info "Repository secret: $(kubectl get secrets -n default -l argocd.argoproj.io/secret-type=repository -o name 2>/dev/null || echo 'None found')"
+        log_info "Repository secret: $(kubectl get secrets -n argocd -l argocd.argoproj.io/secret-type=repository -o name 2>/dev/null || echo 'None found')"
     fi
     
     log_info "Continuing with demo despite application creation issues..."
@@ -178,12 +211,12 @@ show_status() {
     
     # Show environment controllers
     log_info "Environment Controllers:"
-    kubectl get applications -n default -l app-type=environment-controller -o wide 2>/dev/null || log_warning "No environment controllers found"
+    kubectl get applications -n argocd -l app-type=environment-controller -o wide 2>/dev/null || log_warning "No environment controllers found"
     echo
     
     # Show individual applications
     log_info "Individual Applications:"
-    kubectl get applications -n default --show-labels 2>/dev/null | grep -v environment-controller || log_warning "No individual applications found"
+    kubectl get applications -n argocd --show-labels 2>/dev/null | grep -v environment-controller || log_warning "No individual applications found"
     echo
     
     # Show namespaces
@@ -209,40 +242,46 @@ demonstrate_selective_sync() {
     log_header "🎯 App-of-Apps Pattern Demonstration"
     echo
     
-    log_info "This demo shows ArgoCD app-of-apps pattern with selective sync and per-app post-sync hooks:"
+    log_info "This demo shows ArgoCD app-of-apps pattern with selective sync and per-app Argo Workflows:"
     echo
     echo "1. Environment Controllers (Parent Apps) manage individual applications:"
     echo "   - dev-environment-controller → manages dev applications"
     echo "   - production-environment-controller → manages production applications"
     echo
-    echo "2. Individual Applications (Child Apps) with dedicated hooks:"
-    echo "   - dev-demo-app (watches: environments/dev-demo-app/) + demo validation hook"
-    echo "   - dev-api-app (watches: environments/dev-api-app/) + API-specific validation hook"
-    echo "   - production-demo-app (watches: environments/production-demo-app/) + enhanced demo hook"
-    echo "   - production-api-app (watches: environments/production-api-app/) + comprehensive API hook"
+    echo "2. Individual Applications (Child Apps) with dedicated workflows:"
+    echo "   - dev-demo-app (watches: environments/dev-demo-app/) + demo validation workflow"
+    echo "   - dev-api-app (watches: environments/dev-api-app/) + API-specific validation workflow"
+    echo "   - production-demo-app (watches: environments/production-demo-app/) + enhanced demo workflow"
+    echo "   - production-api-app (watches: environments/production-api-app/) + comprehensive API workflow"
     echo
     echo "3. Per-application sync behavior:"
     echo "   - DEV apps: Quick validation, automated sync, lower resources"
     echo "   - PRODUCTION apps: Enhanced validation, manual sync, higher resources"
     echo
     echo "4. Selective syncing behavior:"
-    echo "   - Changes to environments/dev-demo-app/ → ONLY dev-demo-app syncs + demo hook runs"
-    echo "   - Changes to environments/production-api-app/ → ONLY production-api-app syncs + API hook runs"
+    echo "   - Changes to environments/dev-demo-app/ → ONLY dev-demo-app syncs + demo workflow runs"
+    echo "   - Changes to environments/production-api-app/ → ONLY production-api-app syncs + API workflow runs"
     echo "   - Other applications remain completely untouched"
     echo
     echo "5. App-of-Apps benefits:"
-    echo "   - Granular control: Each app has its own lifecycle and hooks"
+    echo "   - Granular control: Each app has its own lifecycle and workflows"
     echo "   - Environment separation: Clear boundaries via environment controllers"
-    echo "   - Per-app customization: Different policies, retries, and validation per app"
+    echo "   - Per-app customization: Different policies, retries, and validation workflows per app"
     echo
-    log_info "Try this to see selective sync in action:"
-    echo "  # Update only dev demo app (only dev-demo-app syncs)"
-    echo "  vim environments/dev-demo-app/deployment.yaml  # Change replicas from 1 to 2"
-    echo "  git add environments/dev-demo-app/ && git commit -m 'Scale dev demo app' && git push"
+    log_info "Try this to see selective sync in action (Helm Workflow):"
+    echo "  # Automated workflow - scale and publish new version:"
+    echo "  ./scripts/helm/helm-workflow.sh scale-and-publish dev-demo-app 2"
+    echo "  git add -A && git commit -m 'Scale dev demo app to 2 replicas (v0.1.1)' && git push"
     echo
-    echo "  # Update only production API app (only production-api-app syncs)"
-    echo "  vim environments/production-api-app/deployment.yaml  # Change replicas from 3 to 5"
-    echo "  git add environments/production-api-app/ && git commit -m 'Scale prod API app' && git push"
+    echo "  # Or use the smart demo script (fully automated):"
+    echo "  ./scripts/demo-selective-sync.sh"
+    echo
+    echo "  # Manual approach (for learning):"
+    echo "  vim environments/dev-demo-app/templates/deployment.yaml  # Change replicas from 1 to 2"
+    echo "  vim environments/dev-demo-app/Chart.yaml               # Bump version: 0.1.0 → 0.1.1"
+    echo "  vim app-of-apps/applications/dev/templates/dev-demo-app.yaml  # Update targetRevision: 0.1.1"
+    echo "  ./scripts/helm/build-helm-packages.sh && ./scripts/helm/upload-helm-packages.sh"
+    echo "  git add -A && git commit -m 'Scale dev demo app (Helm workflow)' && git push"
     echo
     echo "4. Monitor applications by environment:"
     echo "   kubectl get applications -l environment=dev"
@@ -258,16 +297,16 @@ show_commands() {
     echo
     
     log_info "Monitor environment controllers:"
-    echo "  kubectl get applications -n default -l app-type=environment-controller -w"
+    echo "  kubectl get applications -n argocd -l app-type=environment-controller -w"
     echo
     
     log_info "Monitor individual applications:"
-    echo "  kubectl get applications -n default --show-labels -w"
+    echo "  kubectl get applications -n argocd --show-labels -w"
     echo
     
     log_info "Check application details:"
-    echo "  kubectl describe application dev-demo-app -n default"
-    echo "  kubectl describe application production-api-app -n default"
+    echo "  kubectl describe application dev-demo-app -n argocd"
+    echo "  kubectl describe application production-api-app -n argocd"
     echo
     
     log_info "Access applications:"
@@ -282,8 +321,8 @@ show_commands() {
     echo
     
     log_info "Force sync specific apps:"
-    echo "  kubectl patch application dev-demo-app -n default --type merge --patch '{\"operation\":{\"sync\":{}}}'"
-    echo "  kubectl patch application production-api-app -n default --type merge --patch '{\"operation\":{\"sync\":{}}}'"
+    echo "  kubectl patch application dev-demo-app -n argocd --type merge --patch '{\"operation\":{\"sync\":{}}}'"
+    echo "  kubectl patch application production-api-app -n argocd --type merge --patch '{\"operation\":{\"sync\":{}}}'"
     echo
     
     log_info "Monitor by environment:"
@@ -292,11 +331,26 @@ show_commands() {
     echo "  kubectl get applications -l environment=dev -w"
     echo
     
+    log_info "Helm Workflow Commands:"
+    echo "  # Scale and publish new version automatically:"
+    echo "  ./scripts/helm/helm-workflow.sh scale-and-publish dev-api-app 3"
+    echo
+    echo "  # Version management only:"
+    echo "  ./scripts/helm/helm-workflow.sh bump-version dev-api-app minor"
+    echo
+    echo "  # Build and upload packages:"
+    echo "  ./scripts/helm/build-helm-packages.sh"
+    echo "  ./scripts/helm/upload-helm-packages.sh"
+    echo
+    echo "  # Full automated demo:"
+    echo "  ./scripts/demo-selective-sync.sh"
+    echo
+    
     log_info "Clean up:"
     echo "  ./scripts/cleanup.sh"
     echo "  # Or manually:"
-    echo "  kubectl delete application dev-environment-controller -n default"
-    echo "  kubectl delete application production-environment-controller -n default"
+    echo "  kubectl delete application dev-environment-controller -n argocd"
+    echo "  kubectl delete application production-environment-controller -n argocd"
 }
 
 # Main function

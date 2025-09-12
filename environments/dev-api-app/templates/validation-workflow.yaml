@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: dev-api-validation-{{ .Values.image.tag | default "latest" }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  workflowTemplateRef:
+    name: dev-validation-workflow
+    namespace: argo
+  arguments:
+    parameters:
+    - name: environment
+      value: "dev"
+    - name: service-name
+      value: "api-app"
+    - name: service-type
+      value: "api"
+    - name: health-endpoint
+      value: "/health"
+    - name: wait-time
+      value: "15"
+  serviceAccountName: argo-workflow
+  podGC:
+    strategy: OnWorkflowCompletion

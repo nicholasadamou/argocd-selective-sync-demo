@@ -11,9 +11,10 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
-    targetRevision: feature/app-of-apps-selective-sync
-    path: app-of-apps/applications/dev
+    # Helm source configuration
+    repoURL: http://10.42.0.1:8081/repository/helm-hosted/
+    chart: dev-applications
+    targetRevision: 0.1.0
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

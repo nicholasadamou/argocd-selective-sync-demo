@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: production-demo-validation-{{ .Values.image.tag | default "latest" }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  workflowTemplateRef:
+    name: production-validation-workflow
+    namespace: argo
+  arguments:
+    parameters:
+    - name: environment
+      value: "production"
+    - name: service-name
+      value: "demo-app"
+    - name: service-type
+      value: "demo"
+    - name: health-endpoint
+      value: "/"
+    - name: wait-time
+      value: "20"
+    - name: retries
+      value: "3"
+    - name: retry-delay
+      value: "5"
+  serviceAccountName: argo-workflow
+  podGC:
+    strategy: OnWorkflowCompletion

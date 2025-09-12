@@ -13,9 +13,10 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/nicholasadamou/argocd-selective-sync-demo.git
-    targetRevision: feature/app-of-apps-selective-sync
-    path: environments/production-api-app
+    # Helm source configuration
+    repoURL: http://10.42.0.1:8081/repository/helm-hosted/
+    chart: production-api-app
+    targetRevision: 0.1.0
   destination:
     server: https://kubernetes.default.svc
     namespace: production-api-app
@@ -23,7 +24,7 @@ spec:
     syncOptions:
     - CreateNamespace=true
     automated:
-      selfHeal: true  # Enable for demo purposes
+      selfHeal: false  # More conservative for production
       prune: true
     retry:
       limit: 3

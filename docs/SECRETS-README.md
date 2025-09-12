@@ -30,13 +30,13 @@ For advanced users, an enhanced version with multiple authentication methods:
 
 # Using environment variables
 export GITHUB_USERNAME="your_username"
-export GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+export GITHUB_TOKEN="ghp-xxxxxxxxxxxx"
 ./scripts/setup-secrets.sh
 
 # Using credential file
 mkdir -p ~/.config/github
 echo "GITHUB_USERNAME=your_username" > ~/.config/github/credentials
-echo "GITHUB_TOKEN=ghp_xxxxxxxxxxxx" >> ~/.config/github/credentials
+echo "GITHUB_TOKEN=ghp-xxxxxxxxxxxx" >> ~/.config/github/credentials
 chmod 600 ~/.config/github/credentials
 ./scripts/setup-secrets.sh
 
@@ -63,7 +63,7 @@ kubectl apply -f github-repo-secret.yaml
 
 ```bash
 kubectl create secret generic github-private-repo \
-  --namespace=argocd \
+  --namespace=argocd
   --from-literal=type=git \
   --from-literal=url=https://github.com/nicholasadamou/argocd-selective-sync-demo.git \
   --from-literal=username="YOUR_USERNAME" \
@@ -77,15 +77,15 @@ kubectl label secret github-private-repo argocd.argoproj.io/secret-type=reposito
 
 1. Go to GitHub → Settings → Developer settings → Personal access tokens
 2. Create a new token with these scopes:
-   - `repo` (minimum required for ArgoCD)
-   - `read:user` (optional, for user information)
+   - `read_repository` (minimum required for ArgoCD)
+   - `read_user` (optional, for user information)
 3. Set appropriate expiration date (recommend 90 days or less)
 4. Copy the token immediately (you won't see it again!)
 
 ### Token Format
-GitHub Personal Access Tokens typically start with `ghp_` followed by 36 characters:
+GitHub Personal Access Tokens typically start with `ghp_` followed by characters:
 ```
-ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ghp_xxxxxxxxxxxxxxxxxxxx
 ```
 
 ## 🛡️ Security Best Practices
