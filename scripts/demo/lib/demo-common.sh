@@ -24,9 +24,9 @@ log_step() {
     echo -e "${CYAN}[STEP]${NC} $1"
 }
 
-# Helper function for kubectl commands via vagrant-ssh
-vagrant_kubectl() {
-    vagrant-ssh "$1"
+# Helper function for kubectl commands
+kube_exec() {
+    kubectl "$@"
 }
 
 # Check prerequisites specific to the demo
@@ -34,7 +34,7 @@ check_demo_prerequisites() {
     log "Checking prerequisites for Helm-based selective sync demo..."
     
     # Use common library's prerequisite checking with Helm-specific requirements
-    check_prerequisites "kubectl git helm vagrant-ssh vagrant-scp"
+    check_prerequisites "kubectl git helm curl docker"
     
     # Check if we're in project root directory
     if [ ! -f "README.md" ] || [ ! -d "environments" ]; then
@@ -70,16 +70,10 @@ check_demo_prerequisites() {
         exit 1
     fi
     
-    # Check Vagrant lock status early to avoid issues later
-    if ! check_vagrant_lock; then
-        error "Vagrant lock detected. Please resolve before running the demo."
-        exit 1
-    fi
-    
-    # Check if applications exist in cluster (using vagrant-ssh)
+    # Check if applications exist in cluster
     local apps_count=0
-    if vagrant-ssh "kubectl get applications -n argocd --no-headers" >/dev/null 2>&1; then
-        apps_count=$(vagrant-ssh "kubectl get applications -n argocd --no-headers 2>/dev/null | grep -E '(dev-api-app|dev-demo-app)' | wc -l" || echo "0")
+    if kubectl get applications -n argocd --no-headers >/dev/null 2>&1; then
+        apps_count=$(kubectl get applications -n argocd --no-headers 2>/dev/null | grep -E '(dev-api-app|dev-demo-app)' | wc -l || echo "0")
         # Clean up any non-numeric characters
         apps_count=$(echo "$apps_count" | tr -cd '0-9' || echo "0")
     fi
@@ -102,5 +96,5 @@ demo_init() {
 }
 
 # Export demo-specific functions
-export -f log_header log_step vagrant_kubectl
+export -f log_header log_step kube_exec
 export -f check_demo_prerequisites demo_init

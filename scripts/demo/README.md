@@ -26,7 +26,7 @@ scripts/demo/
 ### `lib/demo-common.sh` - Common Functions
 - **Purpose**: Shared functionality and prerequisites checking
 - **Size**: ~106 lines
-- **Functions**: Prerequisites validation, Vagrant lock checking, logging, initialization
+- **Functions**: Prerequisites validation, logging, initialization
 - **Dependencies**: `scripts/helm/lib/nexus-common.sh`
 
 ### `lib/demo-state.sh` - State Management
@@ -122,7 +122,7 @@ run.sh
 The modular demo integrates seamlessly with existing scripts:
 - Uses `scripts/helm/lib/nexus-common.sh` for Nexus operations
 - Calls `scripts/helm/helm-workflow.sh` for Helm operations
-- Maintains compatibility with `vagrant-ssh` and `vagrant-scp` tools
+- Works directly with Docker and kubectl commands
 - Preserves all original functionality and command-line options
 
 This modular architecture makes the codebase much more maintainable while preserving the full functionality and user experience of the original demo script.

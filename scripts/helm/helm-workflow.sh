@@ -183,20 +183,13 @@ publish_single_app_package() {
     # We'll need to call the upload function directly with the specific file
     log "Uploading $package_file to Nexus..."
     
-    # Copy the single package to Vagrant using base64 encoding (more reliable than vagrant-scp)
+    # Upload to Nexus directly
     local package_name=$(basename "$package_file")
     local absolute_package_path=$(realpath "$package_file")
-    log "Copying $package_name to Vagrant using base64 transfer..."
-    
-    if base64 "$absolute_package_path" | vagrant-ssh "base64 -d > /tmp/$package_name"; then
-        log "Successfully copied $package_name to Vagrant"
-    else
-        error "Failed to copy $package_file to Vagrant"
-        return 1
-    fi
+    log "Uploading $package_name directly to Nexus..."
     
     # Upload to Nexus
-    if ! vagrant-ssh "curl -u admin:admin123 --upload-file '/tmp/$(basename "$package_file")' 'http://localhost:8081/repository/helm-hosted/'"; then
+    if ! curl -u "admin:admin123" --upload-file "$absolute_package_path" "$NEXUS_URL/repository/helm-hosted/"; then
         error "Failed to upload $package_file to Nexus"
         return 1
     fi
@@ -257,7 +250,7 @@ show_usage() {
     echo
     echo "Prerequisites:"
     echo "  • Nexus Repository Manager running"
-    echo "  • vagrant-scripts toolkit available"
+    echo "  • Docker available for Nexus container"
     echo "  • Helm CLI installed"
 }
 

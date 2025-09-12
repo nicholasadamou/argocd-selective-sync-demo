@@ -26,7 +26,6 @@ This demo showcases the **App-of-Apps pattern** where each environment has a con
 │   ├── demo-selective-sync.sh      # selective sync demo (Helm-only workflow)
 │   ├── deploy-demo.sh              # Deploy the demo environment
 │   ├── cleanup.sh                  # Clean up deployed resources
-│   ├── fix-vagrant-lock.sh         # Fix Vagrant environment locks
 │   ├── credentials.example         # Example credentials file
 │   ├── demo/                       # Modern demo framework
 │   │   ├── README.md               # Demo framework documentation
@@ -151,20 +150,10 @@ This demo uses the **App-of-Apps pattern** with **environment controllers** mana
 
 ### For Helm Repository Setup (Required)
 This demo requires the Helm repository setup with Nexus:
-- **Vagrant environment** with Docker support
-- **vagrant-scripts** tools installed:
-  - `vagrant-ssh` - Enhanced SSH access to Vagrant
-  - `vagrant-scp` - File transfer to/from Vagrant
+- **Docker** installed and running
 - **Helm CLI** installed and available in your PATH
-- Network connectivity between host and Vagrant environment
-
-**Install vagrant-scripts:**
-```bash
-# Install the vagrant-scripts toolkit
-git clone https://github.com/nicholasadamou/vagrant-scripts.git
-cd vagrant-scripts
-./install.sh
-```
+- **curl** for API interactions with Nexus
+- Network connectivity to Nexus instance
 
 ## 🛠️ Quick Setup
 
@@ -449,14 +438,14 @@ Before running the full demo, use the `--dry-run` flag to see exactly what the s
 ### 📦 **Helm-Based Workflow**
 The demo script uses the complete Helm-based deployment workflow:
 
-- **Prerequisites**: Helm CLI, Nexus Repository Manager, vagrant-scripts toolkit
+- **Prerequisites**: Helm CLI, Nexus Repository Manager, Docker
 - **Integration**: Uses `helm-workflow.sh` for complete end-to-end workflow
 - **Semantic Versioning**: Automatically bumps chart versions using semantic versioning
 - **Nexus Repository**: Builds, packages, and uploads Helm charts to Nexus
 - **ArgoCD Integration**: Updates `targetRevision` in ArgoCD application manifests
 
 ### 🚀 **What the Demo Does:**
-1. **Verify prerequisites** - Helm CLI, Nexus, vagrant-scripts, etc.
+1. **Verify prerequisites** - Helm CLI, Nexus, Docker, etc.
 2. **Show current state** of both dev applications
 3. **Scale dev-api-app** using complete Helm workflow:
    - Update replicas in Helm template (`environments/dev-api-app/templates/deployment.yaml`)

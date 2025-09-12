@@ -63,9 +63,9 @@ wait_for_argocd_revert_sync() {
     while [ $(($(date +%s) - start_time)) -lt $max_wait ]; do
         local elapsed=$(($(date +%s) - start_time))
         local api_replicas api_status api_health
-        api_replicas=$(vagrant-ssh "kubectl get deployment -n dev-api-app -o jsonpath='{.items[0].spec.replicas}' 2>/dev/null" || echo "0")
-        api_status=$(vagrant-ssh "kubectl get application dev-api-app -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null" || echo "Unknown")
-        api_health=$(vagrant-ssh "kubectl get application dev-api-app -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null" || echo "Unknown")
+        api_replicas=$(kubectl get deployment -n dev-api-app -o jsonpath='{.items[0].spec.replicas}' 2>/dev/null || echo "0")
+        api_status=$(kubectl get application dev-api-app -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+        api_health=$(kubectl get application dev-api-app -n argocd -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
 
         printf "\r${CYAN}[%02ds]${NC} Replicas: %s, Status: %s, Health: %s" $elapsed "$api_replicas" "$api_status" "$api_health"
 
@@ -103,17 +103,17 @@ cleanup_api_artifacts() {
 
     log "Checking Nexus repository connection..."
     local nexus_health
-    nexus_health=$(vagrant-ssh "curl -s -w '%{http_code}' -o /dev/null -u admin:admin123 'http://localhost:8081/service/rest/v1/repositories'" 2>/dev/null || echo "000")
+    nexus_health=$(curl -s -w '%{http_code}' -o /dev/null -u "admin:admin123" "$NEXUS_URL/service/rest/v1/repositories" 2>/dev/null || echo "000")
     if [ "$nexus_health" != "200" ]; then
         warn "Cannot connect to Nexus repository (HTTP: $nexus_health). Skipping Nexus cleanup."
-        log "This may be normal if Vagrant is not running or Nexus is not accessible"
+        log "This may be normal if Nexus is not running or not accessible"
         return 0
     fi
     log "Nexus connection verified (HTTP: $nexus_health)"
 
     log "Searching for package in Nexus repository..."
     local component_search component_id
-    component_search=$(vagrant-ssh "curl -s -u admin:admin123 'http://localhost:8081/service/rest/v1/search?repository=helm-hosted&name=dev-api-app&version=${version}'" 2>/dev/null || echo "")
+    component_search=$(curl -s -u "admin:admin123" "$NEXUS_URL/service/rest/v1/search?repository=helm-hosted&name=dev-api-app&version=${version}" 2>/dev/null || echo "")
     if [ -z "$component_search" ]; then
         warn "Failed to search Nexus repository"; return 0
     fi
@@ -127,7 +127,7 @@ cleanup_api_artifacts() {
     log "Found component ID: $component_id"
     log "Removing package from Nexus repository..."
     local delete_response
-    delete_response=$(vagrant-ssh "curl -s -w '%{http_code}' -o /dev/null -u admin:admin123 -X DELETE 'http://localhost:8081/service/rest/v1/components/${component_id}'" 2>/dev/null || echo "000")
+    delete_response=$(curl -s -w '%{http_code}' -o /dev/null -u "admin:admin123" -X DELETE "$NEXUS_URL/service/rest/v1/components/${component_id}" 2>/dev/null || echo "000")
     if [ "$delete_response" = "204" ] || [ "$delete_response" = "200" ]; then
         success "Package removed from Nexus repository (HTTP: $delete_response)"
     else
@@ -138,7 +138,7 @@ cleanup_api_artifacts() {
 verify_cleanup_summary() {
     log_step "Final state after cleanup:"
     local final_replicas remaining_packages
-    final_replicas=$(vagrant-ssh "kubectl get deployment -n dev-api-app -o jsonpath='{.items[0].spec.replicas}' 2>/dev/null" || echo "0")
+    final_replicas=$(kubectl get deployment -n dev-api-app -o jsonpath='{.items[0].spec.replicas}' 2>/dev/null || echo "0")
     echo "Dev API App replicas: $final_replicas"
     remaining_packages=$(find helm-packages/ -name "dev-api-app-*.tgz" 2>/dev/null | wc -l || echo "0")
     echo "Remaining dev-api-app packages: $remaining_packages"

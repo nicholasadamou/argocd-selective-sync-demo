@@ -19,7 +19,7 @@ fi
 # Check if we can connect to cluster
 if ! kubectl cluster-info &> /dev/null; then
     echo "❌ Cannot connect to Kubernetes cluster"
-    echo "💡 Make sure you're connected to your cluster or use: vagrant-ssh \"./setup-secrets.sh\""
+    echo "💡 Make sure you're connected to your cluster and have proper kubeconfig setup"
     exit 1
 fi
 

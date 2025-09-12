@@ -32,69 +32,8 @@ success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-# Check and handle Vagrant lock status
-check_vagrant_lock() {
-    log "Checking Vagrant lock status..."
-    
-    # Determine Vagrant directory - look for common locations
-    local vagrant_dirs=(
-        "$HOME/code/gitlab/beast/operational/repo/vagrant"
-    )
-    
-    local vagrant_dir=""
-    for dir in "${vagrant_dirs[@]}"; do
-        if [ -f "$dir/Vagrantfile" ]; then
-            vagrant_dir="$dir"
-            log "Found Vagrant directory: $vagrant_dir"
-            break
-        fi
-    done
-    
-    if [ -z "$vagrant_dir" ]; then
-        warn "Could not find Vagrant directory with Vagrantfile"
-        warn "Please ensure Vagrant is set up or run from the correct directory"
-        return 1
-    fi
-    
-    # Change to Vagrant directory and check status
-    local current_dir="$(pwd)"
-    cd "$vagrant_dir" || {
-        error "Failed to change to Vagrant directory: $vagrant_dir"
-        return 1
-    }
-    
-    # Try to run a simple vagrant command to check for locks
-    local vagrant_output
-    vagrant_output=$(vagrant status 2>&1 || true)
-    local vagrant_exit_code=$?
-    
-    # Return to original directory
-    cd "$current_dir"
-    
-    if echo "$vagrant_output" | grep -q "locked"; then
-        warn "Vagrant machine is locked by another process"
-        warn "Vagrant directory: $vagrant_dir"
-        warn "This usually means another Vagrant operation is running"
-        warn "Please wait for the other process to complete, or if stuck:"
-        warn "  1. Check for running Vagrant processes: ps aux | grep vagrant"
-        warn "  2. Kill stuck processes if necessary"
-        warn "  3. Use the helper script: ./scripts/fix-vagrant-lock.sh"
-        warn "  4. Or manually: cd $vagrant_dir && vagrant reload"
-        return 1
-    fi
-    
-    if [ $vagrant_exit_code -ne 0 ]; then
-        warn "Vagrant command failed (exit code: $vagrant_exit_code)"
-        warn "Output: $vagrant_output"
-        return 1
-    fi
-    
-    log "Vagrant status check completed from: $vagrant_dir"
-    return 0
-}
-
-# Helper function to run vagrant ssh commands with retry and lock handling
-vagrant_ssh() {
+# Execute shell commands locally or remotely
+exec_cmd() {
     local command="$1"
     local max_retries=3
     local retry_delay=5
@@ -102,41 +41,31 @@ vagrant_ssh() {
     
     while [ $retry -lt $max_retries ]; do
         local output
-        output=$(vagrant-ssh "$command" 2>&1)
+        output=$(bash -c "$command" 2>&1)
         local exit_code=$?
         
-        # Check if output contains lock message
-        if echo "$output" | grep -q "locked"; then
-            warn "Vagrant is locked (attempt $((retry + 1))/$max_retries)"
+        if [ $exit_code -eq 0 ]; then
+            echo "$output"
+            return $exit_code
+        else
+            warn "Command failed (attempt $((retry + 1))/$max_retries): $command"
             if [ $retry -lt $((max_retries - 1)) ]; then
                 warn "Waiting $retry_delay seconds before retrying..."
                 sleep $retry_delay
                 retry_delay=$((retry_delay * 2))  # Exponential backoff
             fi
             retry=$((retry + 1))
-        else
-            # Command succeeded or failed for reasons other than locking
-            echo "$output"
-            return $exit_code
         fi
     done
     
-    error "Vagrant remains locked after $max_retries attempts"
-    error "Please resolve the Vagrant lock issue manually"
+    error "Command failed after $max_retries attempts: $command"
     return 1
-}
-
-# Helper function to upload files to vagrant
-vagrant_upload() {
-    local local_path="$1"
-    local remote_path="$2"
-    vagrant-scp --to "$local_path" "$remote_path"
 }
 
 # Check if required commands are available
 check_prerequisites() {
     local missing_deps=()
-    local required_commands=("${@:-vagrant vagrant-ssh vagrant-scp}")
+    local required_commands=("${@:-curl helm docker}")
 
     for cmd in $required_commands; do
         if ! command -v "$cmd" &> /dev/null; then
@@ -149,15 +78,17 @@ check_prerequisites() {
         error "Please ensure the following commands are installed and in your PATH:"
         for dep in "${missing_deps[@]}"; do
             case "$dep" in
-                vagrant)
-                    error "  - vagrant: Please install Vagrant"
-                    ;;
-                vagrant-ssh|vagrant-scp)
-                    error "  - $dep: Install from vagrant-scripts repository"
-                    error "    You can install it from: https://gitlab.us.lmco.com/nicholasadamou/vagrant-scripts"
+                curl)
+                    error "  - curl: Please install curl (https://curl.se/)"
                     ;;
                 helm)
                     error "  - helm: Please install Helm (https://helm.sh/docs/intro/install/)"
+                    ;;
+                docker)
+                    error "  - docker: Please install Docker (https://docs.docker.com/get-docker/)"
+                    ;;
+                kubectl)
+                    error "  - kubectl: Please install kubectl (https://kubernetes.io/docs/tasks/tools/)"
                     ;;
                 *)
                     error "  - $dep: Please install this command"
@@ -174,12 +105,12 @@ check_prerequisites() {
 # Check if Nexus container is running
 check_nexus_container() {
     log "Checking if Nexus container is running..."
-    if ! vagrant_ssh "docker ps | grep -q $CONTAINER_NAME"; then
+    if ! exec_cmd "docker ps | grep -q $CONTAINER_NAME"; then
         error "Nexus container ($CONTAINER_NAME) is not running!"
         error "Please start the Nexus container first by running:"
         error "  ./scripts/helm/setup-nexus.sh"
         error "Or manually start it with:"
-        error "  vagrant-ssh 'docker start $CONTAINER_NAME'"
+        error "  docker start $CONTAINER_NAME"
         return 1
     fi
     success "Nexus container is running"
@@ -194,14 +125,14 @@ wait_for_nexus() {
     
     while [ $attempt -le $max_attempts ]; do
         # Check if container is running
-        if ! vagrant_ssh "docker ps | grep -q $CONTAINER_NAME"; then
+        if ! exec_cmd "docker ps | grep -q $CONTAINER_NAME"; then
             error "Nexus container is not running!"
             return 1
         fi
         
         # Check if Nexus web interface is responding
         local http_code
-        http_code=$(vagrant_ssh "curl -s -o /dev/null -w '%{http_code}' $NEXUS_URL" 2>/dev/null || echo "000")
+        http_code=$(curl -s -o /dev/null -w '%{http_code}' "$NEXUS_URL" 2>/dev/null || echo "000")
         
         if echo "$http_code" | grep -q "200\|403\|401"; then
             success "Nexus is ready! (HTTP $http_code)"
@@ -225,7 +156,7 @@ test_nexus_auth() {
     local password="${2:-$ADMIN_PASSWORD}"
     
     log "Testing Nexus authentication for user: $username"
-    if vagrant_ssh "curl -s -f -u $username:$password '$NEXUS_URL/service/rest/v1/status' >/dev/null 2>&1"; then
+    if curl -s -f -u "$username:$password" "$NEXUS_URL/service/rest/v1/status" >/dev/null 2>&1; then
         success "Authentication successful for user: $username"
         return 0
     else
@@ -241,7 +172,7 @@ check_eula_status() {
     
     log "Checking EULA status..."
     local response
-    response=$(vagrant_ssh "curl -s -u $username:$password \"$NEXUS_URL/service/rest/v1/system/eula\" 2>&1")
+    response=$(curl -s -u "$username:$password" "$NEXUS_URL/service/rest/v1/system/eula" 2>&1)
     local exit_code=$?
     
     log "Debug: curl exit code: $exit_code"
@@ -254,18 +185,18 @@ check_eula_status() {
     fi
 }
 
-# Helper function to create JSON files directly on remote system
-create_remote_json() {
+# Helper function to create JSON files locally
+create_temp_json() {
     local json_content="$1"
-    local remote_filename="$2"
+    local local_filename="$2"
     
-    # Use cat with heredoc to create file remotely
-    if vagrant_ssh "cat > /tmp/$remote_filename << 'EOF'
-$json_content
-EOF" >/dev/null 2>&1; then
+    # Create local temporary file
+    local temp_file="/tmp/$local_filename"
+    if echo "$json_content" > "$temp_file"; then
+        echo "$temp_file"
         return 0
     else
-        error "Failed to create JSON file on remote system: $remote_filename"
+        error "Failed to create JSON file: $temp_file"
         return 1
     fi
 }
@@ -294,7 +225,7 @@ nexus_common_init() {
 
 # Export functions to make them available to sourcing scripts
 export -f log warn error success
-export -f vagrant_ssh vagrant_upload check_vagrant_lock
+export -f exec_cmd
 export -f check_prerequisites check_nexus_container wait_for_nexus
-export -f test_nexus_auth check_eula_status create_remote_json
+export -f test_nexus_auth check_eula_status create_temp_json
 export -f validate_project_directory nexus_common_init

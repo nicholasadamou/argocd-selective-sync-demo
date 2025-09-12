@@ -16,20 +16,10 @@ The scripts in this directory automate the complete workflow for:
 
 Before running these scripts, ensure you have:
 
-- **Vagrant** environment running with Docker support
-- **vagrant-scripts** toolkit installed and available in your PATH:
-  - `vagrant-ssh` - Enhanced SSH access to Vagrant
-  - `vagrant-scp` - File transfer to/from Vagrant
+- **Docker** installed and running
 - **Helm CLI** installed and available in your PATH
-- Proper network connectivity between your host and Vagrant environment
-
-**Install vagrant-scripts:**
-```bash
-# Clone and install the vagrant-scripts toolkit
-git clone https://github.com/nicholasadamou/vagrant-scripts.git
-cd vagrant-scripts
-./install.sh
-```
+- **curl** for API interactions with Nexus
+- Proper network connectivity to the Nexus instance
 
 ## Scripts
 
@@ -79,8 +69,7 @@ Completely automates Nexus Repository Manager setup and Helm chart deployment.
    - Configures proper storage and write policies
 
 4. **Package Deployment:**
-   - Copies all Helm packages from `helm-packages/` to Vagrant
-   - Uploads each package to the Nexus repository
+   - Uploads all Helm packages from `helm-packages/` directly to Nexus
    - Verifies successful upload
 
 5. **Verification:**
@@ -106,7 +95,6 @@ Handles manual EULA acceptance and onboarding completion for Nexus Repository Ma
 
 **What it does:**
 1. **Prerequisites Check:**
-   - Verifies vagrant-ssh is available
    - Validates project directory structure
    - Confirms Nexus container is running
 
@@ -140,9 +128,8 @@ Handles manual EULA acceptance and onboarding completion for Nexus Repository Ma
 Dedicated script for uploading Helm packages to Nexus repository.
 
 **What it does:**
-1. **Package Transfer:**
-   - Copies Helm packages from `./helm-packages/` to Vagrant environment
-   - Uses base64 encoding for reliable file transfer across platforms
+1. **Direct Upload:**
+   - Uploads Helm packages from `./helm-packages/` directly to Nexus
    - Handles multiple package files automatically
 
 2. **Nexus Upload:**
@@ -152,7 +139,6 @@ Dedicated script for uploading Helm packages to Nexus repository.
 
 3. **Prerequisites Check:**
    - Validates Nexus container is running
-   - Checks vagrant-scripts availability
    - Ensures packages directory exists
 
 **Usage:**
@@ -213,7 +199,7 @@ A common library providing shared functionality across all scripts to eliminate 
 
 **Features:**
 - **Logging Functions:** Standardized `log()`, `warn()`, `error()`, `success()` with color coding
-- **Vagrant Integration:** `vagrant_ssh()`, `vagrant_upload()` helper functions
+- **Command Execution:** `exec_cmd()` helper function for reliable command execution
 - **Prerequisite Checking:** `check_prerequisites()` with flexible dependency validation
 - **Nexus Operations:** `check_nexus_container()`, `wait_for_nexus()`, `test_nexus_auth()`
 - **EULA Management:** `check_eula_status()` for consistent EULA handling
@@ -331,10 +317,10 @@ spec:
    - Ensure you're running the script from the repository root where `README.md` and `environments/` exist
    - The common library validates directory structure automatically
 
-2. **"vagrant-ssh command not found" or "vagrant-scp command not found"**
-   - Install the vagrant-scripts toolkit: `git clone https://github.com/nicholasadamou/vagrant-scripts.git && cd vagrant-scripts && ./install.sh`
-   - Verify commands are available: `which vagrant-ssh` and `which vagrant-scp`
-   - Check that `~/.local/bin` is in your PATH
+2. **"docker command not found" or "curl command not found"**
+   - Install Docker and ensure it's running
+   - Install curl if not available
+   - Verify commands are available: `which docker` and `which curl`
 
 3. **"Missing required dependencies" error**
    - The scripts now check prerequisites automatically using the common library
@@ -343,25 +329,25 @@ spec:
 
 4. **"Nexus failed to start within expected time"**
    - Nexus container may need more time to initialize
-   - Check if port 8081 is already in use: `vagrant-ssh "netstat -tlnp | grep 8081"`
-   - Verify Docker is running in your Vagrant environment: `vagrant-ssh "docker ps"`
+   - Check if port 8081 is already in use: `netstat -tlnp | grep 8081`
+   - Verify Docker is running: `docker ps`
    - Try restarting with `--fresh` flag: `./scripts/helm/setup-nexus.sh --fresh`
 
 5. **EULA acceptance issues**
    - If `setup-nexus.sh` hangs on EULA acceptance, run `complete_onboarding.sh` manually
    - Open `http://localhost:8081` in browser and complete onboarding manually
    - The scripts will guide you through the web interface steps
-   - Check EULA status: `vagrant-ssh "curl -u admin:admin123 http://localhost:8081/service/rest/v1/system/eula"`
+   - Check EULA status: `curl -u admin:admin123 http://localhost:8081/service/rest/v1/system/eula`
 
 6. **Package upload failures**
    - Ensure helm-packages directory exists with .tgz files
    - Run `build-helm-packages.sh` first to create packages
-   - Check network connectivity between host and Vagrant
-   - Verify Nexus container is running: `vagrant-ssh "docker ps | grep nexus"`
+   - Check network connectivity to Nexus
+   - Verify Nexus container is running: `docker ps | grep nexus`
 
 7. **Authentication issues**
    - Scripts automatically handle password changes from initial random password to `admin123`
-   - If manual intervention needed, check container logs: `vagrant-ssh "docker logs nexus"`
+   - If manual intervention needed, check container logs: `docker logs nexus`
    - Reset password using Nexus web interface if necessary
 
 8. **helm-workflow.sh issues**
@@ -373,7 +359,7 @@ spec:
 
 9. **upload-helm-packages.sh failures**
    - Ensure `./helm-packages/` directory exists with .tgz files
-   - Check base64 command availability in both host and Vagrant
+   - Check curl command availability
    - Verify file permissions and paths
    - Test with single package first for troubleshooting
 
@@ -383,7 +369,7 @@ To manually verify the setup:
 
 ```bash
 # Check if Nexus is running
-vagrant-ssh "docker ps | grep nexus"
+docker ps | grep nexus
 
 # Test repository access
 curl -u admin:admin123 http://localhost:8081/service/rest/v1/repositories
@@ -406,10 +392,10 @@ To completely clean up and start over:
 
 # Option 2: Manual cleanup
 # Stop and remove Nexus container
-vagrant-ssh "docker stop nexus && docker rm nexus"
+docker stop nexus && docker rm nexus
 
 # Remove persistent data
-vagrant-ssh "docker volume rm nexus-data"
+docker volume rm nexus-data
 
 # Remove local packages
 rm -rf helm-packages/

@@ -21,35 +21,16 @@ upload_helm_packages() {
         return 0
     fi
     
-    # Copy packages to Vagrant
-    log "Copying Helm packages to Vagrant environment..."
+    # Upload packages directly to Nexus
+    log "Uploading Helm packages directly to Nexus..."
     for package in "$helm_packages_dir"/*.tgz; do
         if [ -f "$package" ]; then
             local package_name=$(basename "$package")
             local absolute_package_path=$(realpath "$package")
-            log "Copying $package_name..."
-            
-            # Use base64 encoding to transfer the file through vagrant ssh
-            # This avoids path issues with vagrant upload on Windows
-            if base64 "$absolute_package_path" | vagrant_ssh "base64 -d > /tmp/$package_name"; then
-                log "Successfully copied $package_name using base64 transfer"
-            else
-                error "Failed to copy $package_name"
-                return 1
-            fi
-        fi
-    done
-    
-    # Upload packages
-    for package in "$helm_packages_dir"/*.tgz; do
-        if [ -f "$package" ]; then
-            local package_name=$(basename "$package")
             log "Uploading $package_name to Nexus..."
             
-            local upload_response
-            upload_response=$(vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD -X POST '$NEXUS_URL/service/rest/v1/components?repository=$HELM_REPO_NAME' -F 'helm.asset=@/tmp/$package_name'")
-            
-            if [ $? -eq 0 ]; then
+            # Upload directly to Nexus using curl
+            if curl -u "admin:$NEW_ADMIN_PASSWORD" --upload-file "$absolute_package_path" "$NEXUS_URL/repository/$HELM_REPO_NAME/"; then
                 success "Uploaded $package_name"
             else
                 error "Failed to upload $package_name"
@@ -91,7 +72,7 @@ show_usage() {
     echo "Prerequisites:"
     echo "  • Nexus Repository Manager running and accessible"
     echo "  • Helm packages built (run build-helm-packages.sh first)"
-    echo "  • vagrant-ssh and vagrant-scp commands available"
+    echo "  • curl command available for uploading"
     echo
     echo "Examples:"
     echo "  $0            # Upload all packages in ./helm-packages/"

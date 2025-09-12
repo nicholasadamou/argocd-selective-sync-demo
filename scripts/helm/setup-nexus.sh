@@ -22,7 +22,7 @@ determine_admin_password() {
     # First, check if admin.password file exists (fresh installation)
     while [ $attempt -le $max_attempts ]; do
         log "Attempt $attempt/$max_attempts - Checking for admin password file..." >&2
-        password=$(vagrant_ssh "docker exec $CONTAINER_NAME cat /nexus-data/admin.password 2>/dev/null || echo 'NOT_FOUND'")
+        password=$(docker exec "$CONTAINER_NAME" cat /nexus-data/admin.password 2>/dev/null || echo 'NOT_FOUND')
         
         if [ "$password" != "NOT_FOUND" ] && [ -n "$password" ]; then
             success "Found initial admin password from file!" >&2
@@ -31,14 +31,14 @@ determine_admin_password() {
         fi
         
         # If no password file, check if this is a reused volume with our expected password
-        if vagrant_ssh "curl -s -f -u admin:$NEW_ADMIN_PASSWORD http://localhost:8081/service/rest/v1/status >/dev/null 2>&1"; then
+        if curl -s -f -u "admin:$NEW_ADMIN_PASSWORD" "$NEXUS_URL/service/rest/v1/status" >/dev/null 2>&1; then
             success "Admin password is already set to: $NEW_ADMIN_PASSWORD" >&2
             echo "$NEW_ADMIN_PASSWORD"
             return 0
         fi
         
         # Check if default admin password works
-        if vagrant_ssh "curl -s -f -u admin:admin http://localhost:8081/service/rest/v1/status >/dev/null 2>&1"; then
+        if curl -s -f -u "admin:admin" "$NEXUS_URL/service/rest/v1/status" >/dev/null 2>&1; then
             success "Using default admin password" >&2
             echo "admin"
             return 0
@@ -50,7 +50,7 @@ determine_admin_password() {
     done
     
     error "Could not determine admin password after $max_attempts attempts" >&2
-    error "Try cleaning up with: vagrant-ssh 'docker stop nexus && docker rm nexus && docker volume rm nexus-data'" >&2
+    error "Try cleaning up with: docker stop nexus && docker rm nexus && docker volume rm nexus-data" >&2
     return 1
 }
 
@@ -69,11 +69,11 @@ change_admin_password() {
     
     # Use the correct change-password endpoint with string body
     log "Attempting to change password using v1 change-password endpoint..." >&2
-    response=$(vagrant_ssh "curl -s -u admin:$current_password -X PUT '$NEXUS_URL/service/rest/v1/security/users/admin/change-password' -H 'Content-Type: text/plain' -d '$NEW_ADMIN_PASSWORD'")
+    response=$(curl -s -u "admin:$current_password" -X PUT "$NEXUS_URL/service/rest/v1/security/users/admin/change-password" -H 'Content-Type: text/plain' -d "$NEW_ADMIN_PASSWORD")
     
     # Test the new password
     log "Testing new password..." >&2
-    if vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD -f '$NEXUS_URL/service/rest/v1/status' >/dev/null 2>&1"; then
+    if curl -s -u "admin:$NEW_ADMIN_PASSWORD" -f "$NEXUS_URL/service/rest/v1/status" >/dev/null 2>&1; then
         success "Admin password changed successfully"
         return 0
     else
@@ -81,12 +81,14 @@ change_admin_password() {
         log "First method failed, trying alternative user update approach..." >&2
         local user_json='{"userId": "admin", "firstName": "Admin", "lastName": "User", "email": "admin@example.com", "password": "'$NEW_ADMIN_PASSWORD'", "status": "active", "roles": ["nx-admin"]}'
         
-        if create_remote_json "$user_json" "user.json"; then
-            response=$(vagrant_ssh "curl -s -u admin:$current_password -X PUT '$NEXUS_URL/service/rest/v1/security/users/admin' -H 'Content-Type: application/json' -d @/tmp/user.json")
+        local temp_file
+        temp_file=$(create_temp_json "$user_json" "user.json")
+        if [ -n "$temp_file" ]; then
+            response=$(curl -s -u "admin:$current_password" -X PUT "$NEXUS_URL/service/rest/v1/security/users/admin" -H 'Content-Type: application/json' -d @"$temp_file")
             log "User update API response: $response" >&2
             
             # Test the new password again
-            if vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD -f '$NEXUS_URL/service/rest/v1/status' >/dev/null 2>&1"; then
+            if curl -s -u "admin:$NEW_ADMIN_PASSWORD" -f "$NEXUS_URL/service/rest/v1/status" >/dev/null 2>&1; then
                 success "Admin password changed successfully via user update"
                 return 0
             fi
@@ -103,8 +105,10 @@ enable_anonymous_access() {
     local response
     local anonymous_json='{"enabled": true, "userId": "anonymous", "realmName": "NexusAuthorizingRealm"}'
     
-    if create_remote_json "$anonymous_json" "anonymous.json"; then
-        response=$(vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD -X PUT '$NEXUS_URL/service/rest/v1/security/anonymous' -H 'Content-Type: application/json' -d @/tmp/anonymous.json")
+    local temp_file
+    temp_file=$(create_temp_json "$anonymous_json" "anonymous.json")
+    if [ -n "$temp_file" ]; then
+        response=$(curl -s -u "admin:$NEW_ADMIN_PASSWORD" -X PUT "$NEXUS_URL/service/rest/v1/security/anonymous" -H 'Content-Type: application/json' -d @"$temp_file")
         log "Anonymous access API response: $response"
         
         if [ $? -eq 0 ]; then
@@ -123,8 +127,10 @@ create_helm_repository() {
     local response
     local repo_json='{"name": "'$HELM_REPO_NAME'", "online": true, "storage": {"blobStoreName": "default", "strictContentTypeValidation": true, "writePolicy": "ALLOW_ONCE"}}'
     
-    if create_remote_json "$repo_json" "repository.json"; then
-        response=$(vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD -X POST '$NEXUS_URL/service/rest/v1/repositories/helm/hosted' -H 'Content-Type: application/json' -d @/tmp/repository.json")
+    local temp_file
+    temp_file=$(create_temp_json "$repo_json" "repository.json")
+    if [ -n "$temp_file" ]; then
+        response=$(curl -s -u "admin:$NEW_ADMIN_PASSWORD" -X POST "$NEXUS_URL/service/rest/v1/repositories/helm/hosted" -H 'Content-Type: application/json' -d @"$temp_file")
     fi
     
     if [ $? -eq 0 ]; then
@@ -151,7 +157,7 @@ verify_setup() {
     log "Verifying Nexus setup..."
     
     # Check if repository exists
-    if vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD '$NEXUS_URL/service/rest/v1/repositories' | grep -q '$HELM_REPO_NAME'"; then
+    if curl -s -u "admin:$NEW_ADMIN_PASSWORD" "$NEXUS_URL/service/rest/v1/repositories" | grep -q "$HELM_REPO_NAME"; then
         success "Helm repository verified"
     else
         error "Helm repository verification failed"
@@ -159,7 +165,7 @@ verify_setup() {
     fi
     
     # Try to access repository index
-    if vagrant_ssh "curl -s -u admin:$NEW_ADMIN_PASSWORD '$NEXUS_URL/repository/$HELM_REPO_NAME/index.yaml' >/dev/null 2>&1"; then
+    if curl -s -u "admin:$NEW_ADMIN_PASSWORD" "$NEXUS_URL/repository/$HELM_REPO_NAME/index.yaml" >/dev/null 2>&1; then
         success "Repository index accessible"
     else
         warn "Repository index may not be immediately available (this is normal)"
@@ -173,28 +179,28 @@ cleanup_existing_container() {
     
     if [ "$FRESH_INSTALL" = true ]; then
         # Force remove any existing container with the same name
-        if vagrant_ssh "docker ps -a | grep -q $CONTAINER_NAME"; then
+        if docker ps -a | grep -q "$CONTAINER_NAME"; then
             warn "Fresh install requested - removing existing Nexus container..."
-            vagrant_ssh "docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true"
+            docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
             success "Existing container removed"
         fi
         
         warn "Fresh install requested - removing nexus-data volume..."
-        vagrant_ssh "docker volume rm nexus-data >/dev/null 2>&1 || true"
+        docker volume rm nexus-data >/dev/null 2>&1 || true
         success "nexus-data volume removed (if existed)"
     else
         # Check if container exists and is running
-        if vagrant_ssh "docker ps | grep -q $CONTAINER_NAME"; then
+        if docker ps | grep -q "$CONTAINER_NAME"; then
             success "Nexus container is already running"
             return 0
-        elif vagrant_ssh "docker ps -a | grep -q $CONTAINER_NAME"; then
+        elif docker ps -a | grep -q "$CONTAINER_NAME"; then
             log "Nexus container exists but is not running, starting it..."
-            if vagrant_ssh "docker start $CONTAINER_NAME >/dev/null 2>&1"; then
+            if docker start "$CONTAINER_NAME" >/dev/null 2>&1; then
                 success "Existing Nexus container started"
                 return 0
             else
                 warn "Failed to start existing container, will create a new one"
-                vagrant_ssh "docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true"
+                docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
             fi
         else
             log "No existing Nexus container found, will create a new one"
@@ -204,7 +210,7 @@ cleanup_existing_container() {
 
 start_nexus_container() {
     # Check if container is already running (from cleanup_existing_container)
-    if vagrant_ssh "docker ps | grep -q $CONTAINER_NAME"; then
+    if docker ps | grep -q "$CONTAINER_NAME"; then
         log "Nexus container is already running, skipping container creation"
         return 0
     fi
@@ -215,7 +221,7 @@ start_nexus_container() {
     local docker_output
     
     # Try to start the container with detailed error output
-    docker_output=$(vagrant_ssh "docker run -d --name $CONTAINER_NAME -p 8081:8081 -v nexus-data:/nexus-data sonatype/nexus3" 2>&1)
+    docker_output=$(docker run -d --name "$CONTAINER_NAME" -p 8081:8081 -v nexus-data:/nexus-data sonatype/nexus3 2>&1)
     local exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -229,10 +235,10 @@ start_nexus_container() {
         # Try alternative approaches for common issues
         if echo "$docker_output" | grep -q "name.*already in use"; then
             warn "Container name conflict, trying to remove and retry..."
-            vagrant_ssh "docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true"
+            docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
             
             # Retry container creation
-            docker_output=$(vagrant_ssh "docker run -d --name $CONTAINER_NAME -p 8081:8081 -v nexus-data:/nexus-data sonatype/nexus3" 2>&1)
+            docker_output=$(docker run -d --name "$CONTAINER_NAME" -p 8081:8081 -v nexus-data:/nexus-data sonatype/nexus3 2>&1)
             if [ $? -eq 0 ]; then
                 container_id="$docker_output"
                 success "Nexus container started with ID: $container_id"
@@ -241,8 +247,8 @@ start_nexus_container() {
         fi
         
         if echo "$docker_output" | grep -q "disk quota exceeded"; then
-            error "Disk quota exceeded. Please free up disk space on the Vagrant box."
-            error "You can try: vagrant-ssh 'sudo docker system prune -f'"
+            error "Disk quota exceeded. Please free up disk space."
+            error "You can try: docker system prune -f"
         fi
         
         return 1
